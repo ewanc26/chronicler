@@ -12,8 +12,10 @@ import uk.ewancroft.chronicler.config.Messages
 import uk.ewancroft.chronicler.config.PluginConfig
 import uk.ewancroft.chronicler.llm.AnthropicProvider
 import uk.ewancroft.chronicler.llm.LlmProvider
+import uk.ewancroft.chronicler.llm.LMStudioProvider
 import uk.ewancroft.chronicler.llm.OllamaProvider
 import uk.ewancroft.chronicler.llm.OpenAiProvider
+import uk.ewancroft.chronicler.llm.CoCoreProvider
 import uk.ewancroft.chronicler.news.ArchiveStore
 import uk.ewancroft.chronicler.news.BookRenderer
 import uk.ewancroft.chronicler.news.EventStore
@@ -353,6 +355,8 @@ class Chronicler : JavaPlugin() {
         return when (cfg.provider) {
             "openai", "openai-compatible" -> OpenAiProvider(cfg)
             "anthropic" -> AnthropicProvider(cfg)
+            "lmstudio" -> LMStudioProvider(cfg)
+            "cocore", "co/core" -> CoCoreProvider(cfg)
             else -> OllamaProvider(cfg)
         }
     }

@@ -34,6 +34,8 @@ data class LlmConfig(
     val apiKey: String,
     val baseUrl: String,
     val ollamaUrl: String,
+    val lmStudioUrl: String,
+    val coCoreBaseUrl: String,
     val timeoutSeconds: Int,
     val systemPrompt: String,
 )
@@ -104,6 +106,8 @@ class PluginConfig(private val config: FileConfiguration) {
             apiKey = config.getString("llm.api-key", "") ?: "",
             baseUrl = (config.getString("llm.base-url", "https://openrouter.ai/api/v1") ?: "https://openrouter.ai/api/v1").trimEnd('/'),
             ollamaUrl = (config.getString("llm.ollama-url", "http://localhost:11434") ?: "http://localhost:11434").trimEnd('/'),
+            lmStudioUrl = (config.getString("llm.lmstudio-url", "http://localhost:1234") ?: "http://localhost:1234").trimEnd('/'),
+            coCoreBaseUrl = (config.getString("llm.cocore-base-url", "http://localhost:8080") ?: "http://localhost:8080").trimEnd('/'),
             timeoutSeconds = config.getInt("llm.timeout-seconds", 30).coerceIn(5, 120),
             systemPrompt = config.getString("llm.system-prompt", "") ?: "",
         )
