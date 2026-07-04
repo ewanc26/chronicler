@@ -55,7 +55,7 @@ class LMStudioProvider(private val config: LlmConfig) : LlmProvider {
                 })
             }
             put("temperature", JsonPrimitive(0.7))
-            put("max_tokens", JsonPrimitive(300))
+            put("max_tokens", JsonPrimitive(800))
         }
 
         return try {
