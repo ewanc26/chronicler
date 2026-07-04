@@ -3,8 +3,10 @@ package uk.ewancroft.chronicler
 import io.papermc.paper.threadedregions.scheduler.ScheduledTask
 import org.bstats.bukkit.Metrics
 import org.bukkit.Bukkit
+import org.bukkit.NamespacedKey
 import org.bukkit.command.Command
 import org.bukkit.entity.Player
+import org.bukkit.persistence.PersistentDataType
 import org.bukkit.plugin.java.JavaPlugin
 import uk.ewancroft.chronicler.command.ChroniclerCommand
 import uk.ewancroft.chronicler.command.ChroniclerExpansion
@@ -33,6 +35,7 @@ import uk.ewancroft.chronicler.tracker.CombatTracker
 import uk.ewancroft.chronicler.tracker.DeathTracker
 import uk.ewancroft.chronicler.tracker.EconomyTracker
 import uk.ewancroft.chronicler.tracker.EntityTracker
+import uk.ewancroft.chronicler.tracker.IssueRemovalListener
 import uk.ewancroft.chronicler.tracker.MilestoneTracker
 import uk.ewancroft.chronicler.tracker.PlayerActionTracker
 import uk.ewancroft.chronicler.tracker.PrivateMessageTracker
