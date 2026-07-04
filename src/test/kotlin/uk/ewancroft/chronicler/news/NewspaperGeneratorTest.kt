@@ -5,6 +5,8 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import uk.ewancroft.chronicler.config.NewspaperConfig
 import uk.ewancroft.chronicler.config.PrivacyConfig
+import uk.ewancroft.chronicler.llm.ArticleResult
+import uk.ewancroft.chronicler.llm.FakeLlmProvider
 import java.nio.file.Path
 import java.util.logging.Logger
 import kotlin.test.assertEquals
@@ -210,7 +212,7 @@ class NewspaperGeneratorTest {
         store.record(event(EventType.DEATH, player = "hidden", details = mapOf("message" to "hidden fell")))
         store.record(event(EventType.MESSAGE_SENT, player = "visible"))
         val privacy = PrivacyConfig(false, false, false, setOf("hidden"))
-        val newspaper = NewspaperGenerator(store, config, null, false, logger, privacy).generate(1, 0L, System.currentTimeMillis())
+        val newspaper = NewspaperGenerator(store, config, null, false, logger, privacyConfig = privacy).generate(1, 0L, System.currentTimeMillis())
 
         assertTrue(newspaper.sections.flatMap { it.stories }.none { "hidden" in it.players })
         assertTrue(newspaper.sections.none { it.title == "Social" })
@@ -224,5 +226,94 @@ class NewspaperGeneratorTest {
 
         assertEquals("Statistics", newspaper.sections.first().title)
         assertTrue(newspaper.sections.flatMap { it.stories }.all { it.byline == "Server Desk" })
+    }
+
+    @Test
+    fun `llm generates headline section when provider is available`() {
+        store.record(event(EventType.DEATH, details = mapOf("message" to "ewanc26 fell")))
+        val fake = FakeLlmProvider(headline = "LLM Headline", body = "LLM body text.")
+        val gen = NewspaperGenerator(store, config, fake, true, logger, "")
+        val newspaper = gen.generate(1, 0L, System.currentTimeMillis())
+
+        val headlines = newspaper.sections.find { it.title == "Headlines" }
+        assertNotNull(headlines)
+        assertTrue(headlines.stories.any { it.headline == "LLM Headline" })
+    }
+
+    @Test
+    fun `llm resolves tone and maxArticleCharacters in system prompt`() {
+        store.record(event(EventType.DEATH, details = mapOf("message" to "ewanc26 fell")))
+        val fake = FakeLlmProvider()
+        val cfg = config.copy(tone = "witty and sarcastic", maxArticleCharacters = 500)
+        val gen = NewspaperGenerator(store, cfg, fake, true, logger,
+            "Tone is {tone}. Max chars is {maxArticleCharacters}.")
+        gen.generate(1, 0L, System.currentTimeMillis())
+
+        val prompt = fake.capturedSystemPrompts.first()
+        assertTrue(prompt.contains("witty and sarcastic"))
+        assertTrue(prompt.contains("500"))
+        assertTrue(prompt.contains("{tone}") == false)
+    }
+
+    @Test
+    fun `llm system prompt passes through without variables when none used`() {
+        store.record(event(EventType.DEATH, details = mapOf("message" to "fell")))
+        val fake = FakeLlmProvider()
+        val gen = NewspaperGenerator(store, config, fake, true, logger, "Static prompt text.")
+        gen.generate(1, 0L, System.currentTimeMillis())
+
+        assertEquals("Static prompt text.", fake.capturedSystemPrompts.first())
+    }
+
+    @Test
+    fun `llm falls back to template when provider returns null`() {
+        store.record(event(EventType.DEATH, player = "ewanc26", details = mapOf("message" to "ewanc26 fell")))
+        val fake = FakeLlmProvider(headline = "FakeLLM")
+        fake.failOnAll()
+        val gen = NewspaperGenerator(store, config, fake, true, logger, "")
+        val newspaper = gen.generate(1, 0L, System.currentTimeMillis())
+
+        val obits = newspaper.sections.find { it.title == "Obituaries" }
+        assertNotNull(obits)
+        assertTrue(obits.stories.none { it.headline == "FakeLLM" })
+    }
+
+    @Test
+    fun `llm disabled falls back to template`() {
+        store.record(event(EventType.DEATH, details = mapOf("message" to "ewanc26 fell")))
+        val fake = FakeLlmProvider()
+        val gen = NewspaperGenerator(store, config, fake, false, logger, "")
+        val newspaper = gen.generate(1, 0L, System.currentTimeMillis())
+
+        val headlines = newspaper.sections.find { it.title == "Headlines" }
+        assertNotNull(headlines)
+        assertTrue(headlines.stories.none { it.headline == "Fake Headline" })
+    }
+
+    @Test
+    fun `llm system prompt passes section title and summary`() {
+        store.record(event(EventType.DEATH, details = mapOf("message" to "ewanc26 fell")))
+        val fake = FakeLlmProvider()
+        val gen = NewspaperGenerator(store, config, fake, true, logger, "")
+        gen.generate(1, 0L, System.currentTimeMillis())
+
+        assertTrue(fake.capturedSectionTitles.isNotEmpty())
+        assertTrue(fake.capturedEventSummaries.isNotEmpty())
+        assertTrue(fake.capturedEventSummaries.any { it.contains("ewanc26") })
+    }
+
+    @Test
+    fun `llm sections use LLM output across multiple sections`() {
+        store.record(event(EventType.DEATH, details = mapOf("message" to "fell")))
+        store.record(event(EventType.ADVANCEMENT, details = mapOf("advancement" to "story/root", "displayName" to "Minecraft")))
+        val fake = FakeLlmProvider(headline = "LLM Story", body = "LLM body.")
+        val gen = NewspaperGenerator(store, config, fake, true, logger, "")
+        val newspaper = gen.generate(1, 0L, System.currentTimeMillis())
+
+        val llmSections = setOf("Headlines", "Obituaries", "Achievements")
+        newspaper.sections.filter { it.title in llmSections }.forEach { section ->
+            assertTrue(section.stories.any { it.headline == "LLM Story" },
+                "Section '$section' should use LLM output but doesn't")
+        }
     }
 }
