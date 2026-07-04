@@ -258,6 +258,8 @@ class Chronicler : JavaPlugin() {
         val toRemove = player.inventory.contents.filterNotNull().filter { it.itemMeta?.persistentDataContainer?.has(key, PersistentDataType.INTEGER) == true }
         toRemove.forEach { player.inventory.remove(it) }
     }
+
+    fun giveNewspaper(player: Player) {
         val s = state ?: return
         val book = s.publicationTask.getLatestBook()
         if (book == null) {

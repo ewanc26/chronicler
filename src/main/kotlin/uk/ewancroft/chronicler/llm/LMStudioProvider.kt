@@ -79,6 +79,17 @@ class LMStudioProvider(private val config: LlmConfig) : LlmProvider {
             parseArticle(text.content.trim())
         } catch (_: Exception) {
             null
+        } finally {
+            scheduleUnload()
         }
+    }
+
+    private fun scheduleUnload() {
+        try {
+            val dataDir = System.getProperty("chronicler.dataDir") ?: "/data/plugins/Chronicler"
+            val triggerFile = java.io.File(dataDir, "unload-lms.trigger")
+            triggerFile.parentFile.mkdirs()
+            triggerFile.writeText(System.currentTimeMillis().toString())
+        } catch (_: Exception) { }
     }
 }
