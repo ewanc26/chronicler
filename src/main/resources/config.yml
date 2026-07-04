@@ -1,5 +1,5 @@
 # Chronicler configuration
-config-version: 2
+config-version: 3
 
 # Master toggle.
 enabled: true
@@ -108,6 +108,14 @@ editor:
 archive:
   # Oldest issues beyond this count are removed after publication.
   retention: 50
+
+# Backfill issue #0 from server logs on first run.
+# Parses logs/latest.log and rotated logs/*.log.gz for historical
+# joins, deaths, advancements, and chat before the plugin was installed.
+backfill:
+  enabled: true
+  # Maximum rotated log files to parse (1 file ≈ 1 server session).
+  max-log-files: 100
 
 privacy:
   include-private-messages: false

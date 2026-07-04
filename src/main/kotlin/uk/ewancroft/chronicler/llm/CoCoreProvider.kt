@@ -3,6 +3,7 @@ package uk.ewancroft.chronicler.llm
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.buildJsonArray
 import uk.ewancroft.chronicler.config.LlmConfig
 import java.net.URI
 import java.net.http.HttpClient
@@ -42,18 +43,20 @@ class CoCoreProvider(private val config: LlmConfig) : LlmProvider {
             .replace("{series_title}", "The Weekly Chronicle")
             .replace("{server_name}", "this server")
 
+        val messages = buildJsonArray {
+            add(buildJsonObject {
+                put("role", JsonPrimitive("system"))
+                put("content", JsonPrimitive(resolvedSystemPrompt))
+            })
+            add(buildJsonObject {
+                put("role", JsonPrimitive("user"))
+                put("content", JsonPrimitive(prompt))
+            })
+        }
+
         val requestBody = buildJsonObject {
             put("model", JsonPrimitive(config.model))
-            putJsonArray("messages") {
-                add(buildJsonObject {
-                    put("role", JsonPrimitive("system"))
-                    put("content", JsonPrimitive(resolvedSystemPrompt))
-                })
-                add(buildJsonObject {
-                    put("role", JsonPrimitive("user"))
-                    put("content", JsonPrimitive(prompt))
-                })
-            }
+            put("messages", messages)
             put("temperature", JsonPrimitive(0.7))
             put("max_tokens", JsonPrimitive(300))
         }

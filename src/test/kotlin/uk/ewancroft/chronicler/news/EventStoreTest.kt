@@ -151,4 +151,27 @@ class EventStoreTest {
         assertEquals(3, store2.allEvents().size)
         assertEquals("p7", store2.allEvents()[0].playerName)
     }
+
+    @Test
+    fun `recordAll adds events without pruning`() {
+        val store = EventStore(tempDir.resolve("events.json"))
+        store.setMaxEvents(3)
+        val events = (1..10).map { i ->
+            event(EventType.DEATH, ts = i * 100L, player = "p$i")
+        }
+        store.recordAll(events)
+        assertEquals(10, store.allEvents().size)
+    }
+
+    @Test
+    fun `recordAll followed by record prunes to maxEvents`() {
+        val store = EventStore(tempDir.resolve("events.json"))
+        store.setMaxEvents(5)
+        val events = (1..3).map { i ->
+            event(EventType.DEATH, ts = i * 100L, player = "p$i")
+        }
+        store.recordAll(events)
+        store.record(event(EventType.KILL, ts = 400L, player = "new"))
+        assertEquals(4, store.allEvents().size)
+    }
 }

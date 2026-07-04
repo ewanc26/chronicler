@@ -28,6 +28,16 @@ class EventStore(private val dataPath: Path) {
         }
     }
 
+    /**
+     * Bulk-add events without pruning. Used for backfilling issue #0 from server logs.
+     * Pruning is deferred until the next [record] call or [removeThrough].
+     */
+    fun recordAll(newEvents: List<ChronicleEvent>) {
+        synchronized(events) {
+            events.addAll(newEvents)
+        }
+    }
+
     fun eventsSince(timestamp: Long): List<ChronicleEvent> {
         synchronized(events) {
             return events.filter { it.timestamp > timestamp }.toList()

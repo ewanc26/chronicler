@@ -89,6 +89,8 @@ class PluginConfig(private val config: FileConfiguration) {
     val privacy: PrivacyConfig
     val archiveRetention: Int
     val reviewRequired: Boolean
+    val backfillEnabled: Boolean
+    val backfillMaxLogFiles: Int
 
     init {
         enabled = config.getBoolean("enabled", true)
@@ -165,7 +167,9 @@ class PluginConfig(private val config: FileConfiguration) {
             includeCoordinates = config.getBoolean("privacy.include-coordinates", false),
             excludedPlayers = config.getStringList("privacy.excluded-players").map { it.lowercase() }.toSet(),
         )
-        configVersion = config.getInt("config-version", 2)
+        backfillEnabled = config.getBoolean("backfill.enabled", true)
+        backfillMaxLogFiles = config.getInt("backfill.max-log-files", 100).coerceAtLeast(1)
+        configVersion = config.getInt("config-version", 3)
     }
 
     private fun color(value: String?, fallback: Int): Int = value?.removePrefix("#")?.toIntOrNull(16) ?: fallback

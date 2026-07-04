@@ -22,7 +22,7 @@ A PaperMC plugin that tracks server events and generates a dynamic in-game newsp
 - **PlaceholderAPI** — 13+ placeholders exposing issue stats, player playtime, login streaks
 - **Archived Issues** — Every issue is saved to disk and browsable via `/chronicler archive`
 - **Headline Ticker** — Periodic action-bar broadcasts of random headlines from the latest issue
-- **Issue #0** — On first run, any backlogged events from before the plugin was installed are automatically compiled into issue #0
+- **Issue #0** — On first run, server logs (`logs/latest.log` and rotated `*.log.gz`) are parsed to backfill historical events (joins, deaths, advancements, chat) into issue #0
 - **Auto-Delivery** — Each new issue spawns directly into every online player's inventory (drops at feet if full); players can opt out with `/chronicler subscribe`
 - **Locale Support** — All messages customizable via `messages.yml` (MiniMessage format)
 - **bStats Metrics** — Anonymous usage statistics (configurable)

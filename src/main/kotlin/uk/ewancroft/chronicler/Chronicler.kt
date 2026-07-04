@@ -176,6 +176,7 @@ class Chronicler : JavaPlugin() {
             archiveStore = archiveStore,
             logger = logger,
             activationTime = activationTime,
+            logsDir = dataFolder.parentFile?.parentFile?.toPath()?.resolve("logs"),
         ).also { it.start() }
 
         server.pluginManager.registerEvents(object : org.bukkit.event.Listener {

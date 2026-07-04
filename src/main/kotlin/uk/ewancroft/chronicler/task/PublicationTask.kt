@@ -8,6 +8,7 @@ import uk.ewancroft.chronicler.config.Messages
 import uk.ewancroft.chronicler.config.PluginConfig
 import uk.ewancroft.chronicler.config.ScheduleBase
 import uk.ewancroft.chronicler.config.publicationIntervalTicks
+import uk.ewancroft.chronicler.log.LogParser
 import uk.ewancroft.chronicler.news.ArchiveStore
 import uk.ewancroft.chronicler.news.BookRenderer
 import uk.ewancroft.chronicler.news.EventStore
@@ -36,6 +37,7 @@ class PublicationTask(
     private val archiveStore: ArchiveStore?,
     private val logger: Logger,
     private val activationTime: Long,
+    private val logsDir: Path? = null,
 ) {
 
     private var issueNumber = 0
@@ -55,10 +57,22 @@ class PublicationTask(
         loadDraft()
         restoreLatestIssue()
 
-        val backfilledEvents = store.allEvents().count { it.timestamp <= activationTime }
-        if (issueNumber == 0 && lastPublishTime == 0L && backfilledEvents > 0) {
-            logger.info("No prior issues found — publishing issue #0 with $backfilledEvents events through plugin activation.")
-            doPublish(isIssueZero = true, cutoffTime = activationTime)
+        if (issueNumber == 0 && lastPublishTime == 0L) {
+            // First run — backfill from server logs if enabled
+            if (config.backfillEnabled && logsDir != null) {
+                val parser = LogParser(logsDir, config.tracking, logger)
+                val parsedEvents = parser.parse(config.backfillMaxLogFiles)
+                if (parsedEvents.isNotEmpty()) {
+                    store.recordAll(parsedEvents)
+                    logger.info("Backfilled ${parsedEvents.size} events from server logs for issue #0.")
+                }
+            }
+
+            val backfilledEvents = store.allEvents().count { it.timestamp <= activationTime }
+            if (backfilledEvents > 0) {
+                logger.info("No prior issues found — publishing issue #0 with $backfilledEvents events through plugin activation.")
+                doPublish(isIssueZero = true, cutoffTime = activationTime)
+            }
         }
 
         scheduledTask = Bukkit.getGlobalRegionScheduler().runAtFixedRate(
