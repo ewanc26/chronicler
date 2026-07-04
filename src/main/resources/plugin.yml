@@ -1,5 +1,5 @@
 name: Chronicler
-version: 1.6.0
+version: 1.8.1
 main: uk.ewancroft.chronicler.Chronicler
 api-version: '1.21'
 description: Tracks server events and generates a dynamic newspaper.

@@ -131,6 +131,7 @@ class Chronicler : JavaPlugin() {
             llmProvider = llmProvider?.takeIf { llmAvailable },
             llmEnabled = cfg.llm.enabled && llmAvailable,
             logger = logger,
+            llmSystemPrompt = cfg.llm.systemPrompt,
             privacyConfig = cfg.privacy,
         )
 

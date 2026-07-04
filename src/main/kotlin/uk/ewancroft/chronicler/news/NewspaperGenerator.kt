@@ -12,6 +12,7 @@ class NewspaperGenerator(
     private val llmProvider: LlmProvider?,
     private val llmEnabled: Boolean,
     private val logger: Logger,
+    private val llmSystemPrompt: String = "",
     private val privacyConfig: PrivacyConfig = PrivacyConfig(false, false, false, emptySet()),
 ) {
     private val maxStories = newspaperConfig.storiesPerSection
@@ -758,7 +759,9 @@ class NewspaperGenerator(
     ): List<Story>? {
         if (!llmEnabled || llmProvider == null || summary.isBlank()) return null
 
-        val systemPrompt = "You are the editor of a Minecraft server newspaper. Write accurate, concise news copy in an inverted-pyramid structure with a factual lead and supporting detail. The tone is ${newspaperConfig.tone}, but never invent facts or quotes. Keep the body below ${newspaperConfig.maxArticleCharacters} characters.\n\nEach response must be exactly:\n---HEADLINE\n(headline, max 60 chars)\n---BODY\n(2-4 complete sentences)"
+        val systemPrompt = llmSystemPrompt
+            .replace("{tone}", newspaperConfig.tone)
+            .replace("{maxArticleCharacters}", newspaperConfig.maxArticleCharacters.toString())
 
         return try {
             logger.fine("Requesting LLM article for section '$sectionTitle' from ${events.size} events.")
