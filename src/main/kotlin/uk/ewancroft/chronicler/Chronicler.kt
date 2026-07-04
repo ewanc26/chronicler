@@ -163,6 +163,7 @@ class Chronicler : JavaPlugin() {
             PlayerActionTracker(eventStore, cfg.tracking),
         )
         trackers.add(SessionTracker(eventStore, sessionStore, cfg.tracking))
+        trackers.add(IssueRemovalListener(this))
         trackers.forEach { server.pluginManager.registerEvents(it, this) }
 
         val publicationTask = PublicationTask(
@@ -252,12 +253,23 @@ class Chronicler : JavaPlugin() {
         )
     }
 
-    fun giveNewspaper(player: Player) {
+    fun removeIssueFromPlayer(player: Player) {
+        val key = NamespacedKey(this, "chronicler_issue")
+        val toRemove = player.inventory.contents.filterNotNull().filter { it.itemMeta?.persistentDataContainer?.has(key, PersistentDataType.INTEGER) == true }
+        toRemove.forEach { player.inventory.remove(it) }
+    }
         val s = state ?: return
         val book = s.publicationTask.getLatestBook()
         if (book == null) {
             player.sendMessage(s.messages.noIssue())
             return
+        }
+        // Tag the book so we can detect when it's opened
+        val meta = book.itemMeta
+        if (meta != null) {
+            val key = NamespacedKey(this, "chronicler_issue")
+            meta.persistentDataContainer.set(key, PersistentDataType.INTEGER, 1)
+            book.itemMeta = meta
         }
         if (player.inventory.firstEmpty() == -1) {
             player.sendMessage(s.messages.inventoryFull())
@@ -280,16 +292,83 @@ class Chronicler : JavaPlugin() {
     fun recordTestEvent(type: EventType, sender: org.bukkit.command.CommandSender): ChronicleEvent? {
         val store = state?.eventStore ?: return null
         val player = sender as? Player
+        val playerName = player?.name ?: sender.name
+        val details = buildTestDetails(type, playerName)
         val event = ChronicleEvent(
             type = type,
             timestamp = System.currentTimeMillis(),
-            playerName = player?.name ?: sender.name,
+            playerName = playerName,
             playerUuid = player?.uniqueId?.toString() ?: "",
-            world = player?.world?.name ?: "server",
-            details = mapOf("test" to "true", "source" to "command"),
+            world = player?.world?.name ?: "world",
+            details = details,
         )
         store.record(event)
         return event
+    }
+
+    private fun buildTestDetails(type: EventType, player: String): Map<String, String> {
+        return when (type) {
+            EventType.DEATH -> mapOf("message" to "$player was slain by Zombie")
+            EventType.KILL -> mapOf("entity" to "ZOMBIE", "entityName" to "Zombie")
+            EventType.PVP_KILL -> mapOf("message" to "$player was slain by ${player}2", "killer" to "${player}2", "killerUuid" to "uuid-${player}2")
+            EventType.ADVANCEMENT -> mapOf("advancement" to "story/root", "displayName" to "Taking Inventory")
+            EventType.BIOME_DISCOVERY -> mapOf("biome" to "plains")
+            EventType.BLOCK_PLACE -> mapOf("block" to "STONE", "x" to "0", "z" to "0")
+            EventType.BLOCK_BREAK -> mapOf("block" to "DIRT", "x" to "0", "z" to "0")
+            EventType.ORE_DISCOVERY -> mapOf("ore" to "DIAMOND_ORE", "block" to "Diamond Ore")
+            EventType.TRADE -> mapOf("amount" to "3")
+            EventType.END_ENTER -> mapOf("fromWorld" to "world", "firstTime" to "true", "count" to "1")
+            EventType.CHAT -> mapOf("message" to "Hello everyone!")
+            EventType.CRAFT -> mapOf("item" to "DIAMOND_SWORD")
+            EventType.ENCHANT -> mapOf("item" to "DIAMOND_CHESTPLATE", "level" to "30")
+            EventType.FISH -> mapOf("caught" to "COD")
+            EventType.SLEEP -> mapOf("bed" to "true")
+            EventType.ITEM_CONSUME -> mapOf("item" to "GOLDEN_APPLE")
+            EventType.ITEM_BREAK -> mapOf("item" to "DIAMOND_PICKAXE")
+            EventType.SHEAR -> mapOf("entity" to "SHEEP")
+            EventType.FURNACE_EXTRACT -> mapOf("item" to "IRON_INGOT", "amount" to "16")
+            EventType.PORTAL -> mapOf("from" to "world", "to" to "world_nether", "cause" to "portal")
+            EventType.TELEPORT -> mapOf("cause" to "command", "from" to "world", "to" to "world_nether")
+            EventType.EXPLOSION -> mapOf("source" to "CREEPER", "blocks" to "5")
+            EventType.LIGHTNING -> mapOf("x" to "100", "z" to "200")
+            EventType.WEATHER -> mapOf("raining" to "true")
+            EventType.THUNDER -> mapOf("thundering" to "true")
+            EventType.RAID -> mapOf("location" to "Village at 100, 200")
+            EventType.STRUCTURE_GROW -> mapOf("species" to "oak", "blocks" to "20")
+            EventType.TAME -> mapOf("entity" to "WOLF")
+            EventType.BREED -> mapOf("entity" to "SHEEP")
+            EventType.SHEEP_DYE -> mapOf("colour" to "RED")
+            EventType.PROJECTILE_LAUNCH -> mapOf("projectile" to "ARROW")
+            EventType.POTION_THROW -> mapOf("affected" to "1")
+            EventType.FIREWORK -> mapOf("effect" to "burst")
+            EventType.RESPAWN -> mapOf("bedSpawn" to "true")
+            EventType.KICK -> mapOf("reason" to "Flying is not enabled on this server")
+            EventType.GAMEMODE -> mapOf("from" to "SURVIVAL", "to" to "CREATIVE")
+            EventType.SIGN_EDIT -> mapOf("text" to "Welcome to the server!")
+            EventType.VEHICLE_RIDE -> mapOf("vehicle" to "MINECART")
+            EventType.BUCKET -> mapOf("action" to "fill", "bucket" to "WATER")
+            EventType.RIPTIDE -> mapOf("item" to "TRIDENT")
+            EventType.FLIGHT_TOGGLE -> mapOf("flying" to "true")
+            EventType.GLIDE_TOGGLE -> mapOf("gliding" to "true")
+            EventType.EGG_THROW -> mapOf("hatched" to "true")
+            EventType.HANGING_BREAK -> mapOf("entity" to "ITEM_FRAME", "cause" to "entity")
+            EventType.HANGING_PLACE -> mapOf("entity" to "PAINTING")
+            EventType.SESSION_START -> mapOf("sessionCount" to "1")
+            EventType.DISTANCE_MILESTONE -> mapOf("dist" to "10000")
+            EventType.MILESTONE_LOGIN_STREAK -> mapOf("streak" to "7")
+            EventType.MILESTONE_PLAYTIME -> mapOf("totalMinutes" to "600")
+            EventType.FIRST_JOIN -> mapOf("firstJoin" to "true")
+            EventType.PLAYER_JOIN -> emptyMap()
+            EventType.PLAYER_LEAVE -> emptyMap()
+            EventType.SESSION_END -> emptyMap()
+            EventType.MESSAGE_SENT -> mapOf("command" to "msg")
+            EventType.ENTITY_TRANSFORM -> mapOf("from" to "ZOMBIE", "to" to "DROWNED", "reason" to "drown")
+            EventType.SLIME_SPLIT -> mapOf("count" to "2")
+            EventType.CREEPER_POWER -> mapOf("cause" to "lightning")
+            EventType.PIG_ZAP -> mapOf("pig" to "true", "zombie" to "true")
+            EventType.FIRST_DEATH -> mapOf("message" to "$player discovered gravity")
+            EventType.MILESTONE -> mapOf("milestone" to "100 days")
+        }
     }
 
     fun previewNextIssue(onComplete: (Newspaper?) -> Unit): Boolean {
