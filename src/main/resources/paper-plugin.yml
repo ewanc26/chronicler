@@ -1,5 +1,5 @@
 name: Chronicler
-version: '1.8.1'
+version: '1.8.2'
 main: uk.ewancroft.chronicler.Chronicler
 api-version: '1.21'
 dependencies:
