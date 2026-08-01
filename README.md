@@ -163,6 +163,13 @@ The compiled jar will be in `build/libs/` with the current release name.
 - `plugins/Chronicler/archive/issue-*.json` — Archived issues
 - `plugins/Chronicler/messages.yml` — Localized message strings (MiniMessage)
 
+## Support
+
+If you find this project useful, consider supporting its development:
+
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-F16061?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/ewancroft)
+[![GitHub Sponsors](https://img.shields.io/badge/GitHub%20Sponsors-30363D?style=for-the-badge&logo=github&logoColor=white)](https://github.com/sponsors/ewanc26)
+
 ## License
 
 AGPL-3.0. See [LICENSE](LICENSE).
