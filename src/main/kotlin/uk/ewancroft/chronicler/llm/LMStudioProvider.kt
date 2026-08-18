@@ -80,16 +80,21 @@ class LMStudioProvider(private val config: LlmConfig) : LlmProvider {
         } catch (_: Exception) {
             null
         } finally {
-            scheduleUnload()
+            unloadModel()
         }
     }
 
-    private fun scheduleUnload() {
+    private fun unloadModel() {
         try {
-            val dataDir = System.getProperty("chronicler.dataDir") ?: "/data/plugins/Chronicler"
-            val triggerFile = java.io.File(dataDir, "unload-lms.trigger")
-            triggerFile.parentFile.mkdirs()
-            triggerFile.writeText(System.currentTimeMillis().toString())
+            val request = HttpRequest.newBuilder()
+                .uri(URI.create("${config.lmStudioUrl}/api/v1/models/unload"))
+                .header("Content-Type", "application/json")
+                .timeout(Duration.ofSeconds(5))
+                .POST(HttpRequest.BodyPublishers.ofString(
+                    buildJsonObject { put("instance_id", JsonPrimitive(config.model)) }.toString()
+                ))
+                .build()
+            client.send(request, HttpResponse.BodyHandlers.discarding())
         } catch (_: Exception) { }
     }
 }

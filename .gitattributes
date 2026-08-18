@@ -1,0 +1,13 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+
+# Auto-generated wrappers
+gradlew linguist-generated
+gradlew.bat linguist-generated
+
+# Agent / tooling configuration
+**/.agents/** linguist-vendored
+.claude/** linguist-vendored
+.opencode/** linguist-vendored
+.letta/** linguist-vendored
