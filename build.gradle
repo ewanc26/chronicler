@@ -63,6 +63,14 @@ shadowJar {
     exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA'
 }
 
+// Keep both plugin descriptors in step with the Gradle version.
+processResources {
+    inputs.property 'version', project.version
+    filesMatching(['plugin.yml', 'paper-plugin.yml']) {
+        expand(version: project.version)
+    }
+}
+
 tasks.named('test') {
     useJUnitPlatform()
 }
