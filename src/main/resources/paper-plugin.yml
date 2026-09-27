@@ -2,11 +2,62 @@ name: Chronicler
 version: '${version}'
 main: uk.ewancroft.chronicler.Chronicler
 api-version: '1.21'
+# Every integration is optional; loading after them lets Chronicler see their APIs.
 dependencies:
   server:
     PlaceholderAPI:
       load: BEFORE
       required: false
+      join-classpath: true
     Vault:
       load: BEFORE
       required: false
+      join-classpath: true
+    ViaVersion:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    floodgate:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    BlueMap:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    squaremap:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    Towny:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    Lands:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    LuckPerms:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    mcMMO:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    QuickShop-Hikari:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    Plan:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    Votifier:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    DiscordSRV:
+      load: BEFORE
+      required: false
+      join-classpath: true

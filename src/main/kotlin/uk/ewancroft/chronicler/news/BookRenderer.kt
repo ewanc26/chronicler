@@ -13,9 +13,7 @@ import org.bukkit.persistence.PersistentDataType
 import org.bukkit.inventory.ItemStack
 import org.bukkit.inventory.meta.BookMeta
 import uk.ewancroft.chronicler.config.NewspaperConfig
-import java.text.SimpleDateFormat
 import java.util.Date
-import java.util.Locale
 
 /**
  * Lays an issue out as a written book. Book pages clip rather than scroll, so
@@ -223,5 +221,5 @@ class BookRenderer(
         Component.join(net.kyori.adventure.text.JoinConfiguration.newlines(), lines.map { it.component })
 
     private fun dateLine(time: Long): String =
-        SimpleDateFormat("EEE d MMM yyyy", Locale.UK).format(Date(time))
+        newspaperConfig.formatDate(time, java.time.format.FormatStyle.MEDIUM)
 }

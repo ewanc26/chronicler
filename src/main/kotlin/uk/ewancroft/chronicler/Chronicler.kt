@@ -28,6 +28,7 @@ import uk.ewancroft.chronicler.news.NewspaperGenerator
 import uk.ewancroft.chronicler.news.ChronicleEvent
 import uk.ewancroft.chronicler.news.EventType
 import uk.ewancroft.chronicler.news.WebRenderer
+import uk.ewancroft.chronicler.integration.ClientSupport
 import uk.ewancroft.chronicler.reader.NewspaperReader
 import uk.ewancroft.chronicler.reader.ReaderListener
 import uk.ewancroft.chronicler.reader.ResourcePackService
@@ -74,6 +75,7 @@ class Chronicler : JavaPlugin() {
         val economyTracker: EconomyTracker?,
         val sessionTracker: SessionTracker,
         val reader: NewspaperReader,
+        val packService: ResourcePackService,
         val command: ChroniclerCommand,
     )
 
@@ -175,7 +177,8 @@ class Chronicler : JavaPlugin() {
             null
         }
 
-        val packService = ResourcePackService(this, cfg, dataPath.resolve("web"), logger)
+        val clients = ClientSupport(this, logger)
+        val packService = ResourcePackService(this, cfg, dataPath.resolve("web"), logger, clients)
         webRenderer?.assetProvider = packService::serve
 
         val economyTracker = EconomyTracker(eventStore, cfg.tracking).also {
@@ -221,11 +224,11 @@ class Chronicler : JavaPlugin() {
             },
         ).also { it.start() }
 
-        val reader = NewspaperReader(cfg.newspaper, packService) { number ->
+        val reader = NewspaperReader(cfg.newspaper, packService, clients, bookRenderer::renderToBook) { number ->
             if (number == null) publicationTask.getLatestNewspaper()
             else publicationTask.getLatestNewspaper()?.takeIf { it.issueNumber == number } ?: archiveStore.getIssue(number)
         }
-        if (cfg.reader.newspaperMode) server.pluginManager.registerEvents(ReaderListener(reader, packService, cfg.newspaper), this)
+        if (cfg.reader.newspaperMode) server.pluginManager.registerEvents(ReaderListener(reader, packService, cfg.newspaper, clients), this)
 
         server.pluginManager.registerEvents(object : org.bukkit.event.Listener {
             @org.bukkit.event.EventHandler
@@ -297,6 +300,7 @@ class Chronicler : JavaPlugin() {
             economyTracker = economyTracker,
             sessionTracker = sessionTracker,
             reader = reader,
+            packService = packService,
             command = command,
         )
     }
@@ -438,6 +442,8 @@ class Chronicler : JavaPlugin() {
         reloadConfig()
         state = buildState()
     }
+
+    fun getPackService(): ResourcePackService? = state?.packService
 
     fun getWebPort(): Int = state?.config?.web?.port ?: 0
 

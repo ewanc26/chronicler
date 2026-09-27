@@ -55,7 +55,16 @@ data class NewspaperConfig(
     val secondaryTextColor: Int = 0x3D342A,
     val mutedTextColor: Int = 0x5C4F40,
     val serverName: String = "",
-)
+    /** Language tag for dates on printed pages and books (the reader uses each player's own). */
+    val locale: String = "en-GB",
+) {
+    val javaLocale: java.util.Locale get() = java.util.Locale.forLanguageTag(locale)
+
+    fun formatDate(time: Long, style: java.time.format.FormatStyle): String =
+        java.time.format.DateTimeFormatter.ofLocalizedDate(style)
+            .withLocale(javaLocale)
+            .format(java.time.Instant.ofEpochMilli(time).atZone(java.time.ZoneId.systemDefault()))
+}
 
 data class PrivacyConfig(
     val includePrivateMessages: Boolean,
@@ -169,6 +178,7 @@ class PluginConfig(private val config: FileConfiguration) {
             secondaryTextColor = color(config.getString("newspaper.colors.secondary"), 0x3D342A),
             mutedTextColor = color(config.getString("newspaper.colors.muted"), 0x5C4F40),
             serverName = config.getString("newspaper.server-name", "")?.trim().orEmpty(),
+            locale = config.getString("newspaper.locale", "en-GB")?.trim().takeUnless { it.isNullOrEmpty() } ?: "en-GB",
         )
         web = WebConfig(
             enabled = config.getBoolean("web.enabled", true),

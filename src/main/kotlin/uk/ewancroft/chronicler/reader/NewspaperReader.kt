@@ -18,10 +18,15 @@ import uk.ewancroft.chronicler.config.NewspaperConfig
 import uk.ewancroft.chronicler.news.MinecraftFont
 import uk.ewancroft.chronicler.news.Newspaper
 import uk.ewancroft.chronicler.news.NewspaperPack
-import java.text.SimpleDateFormat
+import org.bukkit.inventory.ItemStack
+import uk.ewancroft.chronicler.integration.BedrockReader
+import uk.ewancroft.chronicler.integration.ClientKind
+import uk.ewancroft.chronicler.integration.ClientSupport
 import java.time.Duration
-import java.util.Date
-import java.util.Locale
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 
 /**
  * The in-game newspaper reader. Players whose client has the Chronicler pack
@@ -31,8 +36,11 @@ import java.util.Locale
 class NewspaperReader(
     private val config: NewspaperConfig,
     private val packs: ResourcePackService,
+    private val clients: ClientSupport,
+    private val bookFor: (Newspaper) -> ItemStack,
     private val findIssue: (Int?) -> Newspaper?,
 ) {
+    private val bedrock: BedrockReader? = clients.floodgate?.let { BedrockReader(it, config, ::date) }
 
     // Dialogs sit on a dark backdrop, so the newsprint accent is lifted towards white to stay legible.
     private val accent = TextColor.lerp(0.55f, TextColor.color(config.accentColor), NamedTextColor.WHITE)
@@ -41,8 +49,15 @@ class NewspaperReader(
     /** Opens [issueNumber] (or the latest issue) at its front page. Returns false if there is none. */
     fun open(player: Player, issueNumber: Int? = null): Boolean {
         val issue = findIssue(issueNumber) ?: return false
-        val pages = packs.pagesFor(player, issue.issueNumber)
-        if (pages != null) showPrinted(player, issue, pages, 0) else showFront(player, issue)
+        when (clients.kind(player)) {
+            ClientKind.BEDROCK -> bedrock?.open(player, issue) ?: player.openBook(bookFor(issue))
+            // Older clients see dialogs as chest menus (ViaBackwards); the book is laid out for them.
+            ClientKind.LEGACY_JAVA -> player.openBook(bookFor(issue))
+            ClientKind.MODERN -> {
+                val pages = packs.pagesFor(player, issue.issueNumber)
+                if (pages != null) showPrinted(player, issue, pages, 0) else showFront(player, issue)
+            }
+        }
         return true
     }
 
@@ -80,7 +95,7 @@ class NewspaperReader(
             Component.text()
                 .append(Component.text(config.title, NamedTextColor.WHITE, TextDecoration.BOLD))
                 .append(Component.newline())
-                .append(Component.text("No. ${issue.issueNumber} · ${date(issue.toTime)}", muted))
+                .append(Component.text("No. ${issue.issueNumber} · ${date(player, issue.toTime)}", muted))
                 .build(),
             320,
         )
@@ -173,7 +188,11 @@ class NewspaperReader(
     private fun title(issue: Newspaper, where: String): Component =
         Component.text("${config.title} — No. ${issue.issueNumber} — $where")
 
-    private fun date(time: Long): String = SimpleDateFormat("EEEE d MMMM yyyy", Locale.UK).format(Date(time))
+    /** Dates in the reader follow the player's client language. */
+    private fun date(player: Player, time: Long): String =
+        DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL)
+            .withLocale(player.locale())
+            .format(Instant.ofEpochMilli(time).atZone(ZoneId.systemDefault()))
 
     private companion object {
         val CALLBACK_OPTIONS: ClickCallback.Options = ClickCallback.Options.builder()

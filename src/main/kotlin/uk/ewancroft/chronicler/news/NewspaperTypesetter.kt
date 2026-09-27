@@ -8,9 +8,7 @@ import java.awt.FontMetrics
 import java.awt.Graphics2D
 import java.awt.RenderingHints
 import java.awt.image.BufferedImage
-import java.text.SimpleDateFormat
 import java.util.Date
-import java.util.Locale
 
 /**
  * Typesets an issue as broadsheet pages: blackletter masthead, dateline, a
@@ -458,7 +456,7 @@ class NewspaperTypesetter(
     }
 
     private fun dateLine(time: Long): String =
-        SimpleDateFormat("EEEE, d MMMM yyyy", Locale.UK).format(Date(time))
+        config.formatDate(time, java.time.format.FormatStyle.FULL)
 }
 
 /** The bundled OFL typefaces; loaded from the plugin jar so no system fonts are needed. */

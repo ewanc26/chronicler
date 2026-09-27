@@ -36,6 +36,7 @@ class ChroniclerCommand(
             "archive" -> showArchive(sender, args)
             "editor" -> editor(sender, args)
             "diagnostics" -> diagnostics(sender)
+            "pack" -> packCommand(sender, args)
             "test" -> runTestCommand(sender, args)
             "help" -> { sendHelp(sender); true }
             else -> { sendHelp(sender); true }
@@ -49,7 +50,7 @@ class ChroniclerCommand(
         args: Array<out String>,
     ): List<String> {
         if (args.size == 1) {
-            val cmds = listOf("read", "web", "latest", "reload", "status", "publish", "stats", "subscribe", "archive", "editor", "diagnostics", "test", "help")
+            val cmds = listOf("read", "web", "latest", "reload", "status", "publish", "stats", "subscribe", "archive", "editor", "diagnostics", "pack", "test", "help")
             return cmds.filter { it.startsWith(args[0], true) }
         }
         if (args[0].lowercase() == "stats" && args.size == 2) {
@@ -60,6 +61,9 @@ class ChroniclerCommand(
         }
         if (args[0].lowercase() == "editor" && args.size == 2) {
             return listOf("create", "preview", "remove", "edit", "publish").filter { it.startsWith(args[1], true) }
+        }
+        if (args[0].lowercase() == "pack" && args.size == 2) {
+            return listOf("status", "export").filter { it.startsWith(args[1], true) }
         }
         if (args[0].lowercase() == "test" && args.size == 2) {
             return listOf("event", "events", "preview").filter { it.startsWith(args[1], true) }
@@ -116,6 +120,29 @@ class ChroniclerCommand(
                 sender.sendMessage(if (started) mm.deserialize("<gray>Generating preview…</gray>") else messages.pluginNotReady())
             }
             else -> sender.sendMessage(mm.deserialize("<yellow>Usage: /chronicler test event <type>, events [limit], or preview</yellow>"))
+        }
+        return true
+    }
+
+    private fun packCommand(sender: CommandSender, args: Array<out String>): Boolean {
+        if (!sender.hasPermission("chronicler.admin")) return deny(sender)
+        val packs = plugin.getPackService()
+        val built = packs?.current
+        if (packs == null || !packs.enabled || built == null) {
+            sender.sendMessage(net.kyori.adventure.text.Component.text("The newspaper pack is not built (reader.mode: book, the pack is disabled, or no issue yet)."))
+            return true
+        }
+        when (args.getOrNull(1)?.lowercase()) {
+            "export" -> {
+                val dir = packs.export(plugin.dataFolder.toPath().resolve("pack"))
+                sender.sendMessage(net.kyori.adventure.text.Component.text(
+                    "Exported issue #${built.issueNumber}'s pack to ${dir} (zip, folder and .sha1). " +
+                        "Clients stack server packs, so it can usually be offered alongside your own."))
+            }
+            else -> sender.sendMessage(net.kyori.adventure.text.Component.text(
+                "Pack for issue #${built.issueNumber}: ${built.zip.size / 1024} KB, sha1 ${built.sha1}\n" +
+                    "URL: ${packs.publicUrl() ?: "none (set reader.resource-pack.public-url)"}\n" +
+                    "Loaded by ${packs.loadedCount()} online player(s)."))
         }
         return true
     }

@@ -8,6 +8,8 @@ import org.bukkit.entity.Player
 import org.bukkit.event.player.PlayerResourcePackStatusEvent
 import org.bukkit.plugin.Plugin
 import uk.ewancroft.chronicler.config.PluginConfig
+import uk.ewancroft.chronicler.integration.ClientKind
+import uk.ewancroft.chronicler.integration.ClientSupport
 import uk.ewancroft.chronicler.news.Newspaper
 import uk.ewancroft.chronicler.news.NewspaperPack
 import uk.ewancroft.chronicler.news.NewspaperTypesetter
@@ -31,6 +33,7 @@ class ResourcePackService(
     private val config: PluginConfig,
     private val webDir: Path,
     private val logger: Logger,
+    private val clients: ClientSupport,
 ) {
     @Volatile
     var current: NewspaperPack.Built? = null
@@ -70,6 +73,8 @@ class ResourcePackService(
 
     fun offer(player: Player) {
         val built = current ?: return
+        // Bedrock and older Java clients cannot use a format-${NewspaperPack.PACK_FORMAT} pack.
+        if (clients.kind(player) != ClientKind.MODERN) return
         val url = packUrl(built) ?: return
         if (offered[player.uniqueId] == built.id && loaded[player.uniqueId] == built.id) return
         // Replace only our previous issue's pack, never the server's or other plugins' packs.
@@ -104,6 +109,35 @@ class ResourcePackService(
             }
             else -> {}
         }
+    }
+
+    /** How many online players currently have this issue's pack loaded. */
+    fun loadedCount(): Int = current?.let { built -> loaded.values.count { it == built.id } } ?: 0
+
+    fun publicUrl(): String? = current?.let { packUrl(it) }
+
+    /**
+     * Writes the current pack as a zip and as a folder under [target], for
+     * servers that host the pack themselves or merge it into their own.
+     * Modern clients stack server packs, so merging is rarely necessary.
+     */
+    fun export(target: Path): Path? {
+        val built = current ?: return null
+        Files.createDirectories(target)
+        target.resolve("chronicler-pack.zip").writeAtomically(built.zip)
+        val folder = target.resolve("chronicler-pack")
+        if (Files.exists(folder)) Files.walk(folder).sorted(Comparator.reverseOrder()).forEach(Files::delete)
+        java.util.zip.ZipInputStream(built.zip.inputStream()).use { zip ->
+            while (true) {
+                val entry = zip.nextEntry ?: break
+                val out = folder.resolve(entry.name).normalize()
+                require(out.startsWith(folder)) { "unsafe entry ${entry.name}" }
+                Files.createDirectories(out.parent)
+                Files.write(out, zip.readBytes())
+            }
+        }
+        target.resolve("chronicler-pack.sha1").writeAtomically(built.sha1)
+        return target
     }
 
     fun forget(player: Player) {

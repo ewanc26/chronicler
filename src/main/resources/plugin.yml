@@ -4,6 +4,7 @@ main: uk.ewancroft.chronicler.Chronicler
 api-version: '1.21'
 description: Tracks server events and generates a dynamic newspaper.
 author: ewanc26
+softdepend: [PlaceholderAPI, Vault, ViaVersion, floodgate, BlueMap, squaremap, Towny, Lands, LuckPerms, mcMMO, QuickShop-Hikari, Plan, Votifier, DiscordSRV]
 
 commands:
   chronicler:
