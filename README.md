@@ -29,6 +29,25 @@ A PaperMC plugin that tracks server events and generates a dynamic in-game newsp
 - **Paper Plugin Support** — Includes `paper-plugin.yml` with soft dependency declarations for PlaceholderAPI and Vault
 - **Update Checker** — Checks GitHub for newer releases on startup
 
+## The In-Game Newspaper
+
+![The printed edition in the Minecraft client](docs/images/reader-in-game.png)
+
+Each issue is typeset as broadsheet pages (blackletter masthead, dateline, lead story with drop cap, justified columns, section bands and a statistics box) and shown in a reader screen when a player right-clicks their newspaper or runs `/chronicler read`.
+
+How it works:
+
+- Chronicler builds a small resource pack for the latest issue (about 250 KB per page) and serves it from the embedded web server. Players are offered it on join and after each new issue; it only ever replaces Chronicler's own pack.
+- Pages are drawn as bitmap-font glyphs inside a dialog, so no client mod is needed. The pack also gives newspapers their own item texture.
+- Players who decline the pack get a **text edition** with section-by-section navigation, and the item is still a normal written book, laid out to fit book pages exactly.
+- Old papers printed by earlier versions open in the reader too.
+
+Set `reader.resource-pack.public-url` to the address players reach your web server on (for example `http://play.example.com:8080`). If it is blank, `server-ip` is used; if that is blank too, the pack is written to `plugins/Chronicler/web/chronicler-pack.zip` for you to host or merge into your own server pack. Set `reader.mode: book` to keep the classic written book only.
+
+<img src="docs/images/front-page.png" alt="A typeset front page" width="360">
+
+Fonts: [UnifrakturMaguntia](https://github.com/google/fonts/tree/main/ofl/unifrakturmaguntia) and [Old Standard TT](https://github.com/google/fonts/tree/main/ofl/oldstandardtt), both under the SIL Open Font License (included in `src/main/resources/fonts/`).
+
 ## Requirements
 
 - **Server:** A supported Paper build on the current API line
@@ -100,7 +119,8 @@ The LLM is probed asynchronously at startup and again before each issue, so a mo
 
 | Command | Permission | Description |
 |---|---|---|
-| `/chronicler read` | `chronicler.use` | Receive the latest issue as a book |
+| `/chronicler read` | `chronicler.use` | Receive and open the latest issue |
+| `/chronicler read <player>` | `chronicler.admin` | Hand a player the latest issue and open it for them |
 | `/chronicler web` | `chronicler.use` | Show the web view URL |
 | `/chronicler status` | `chronicler.admin` | Show plugin status |
 | `/chronicler stats <player>` | `chronicler.use` | View a player's tracked stats |
