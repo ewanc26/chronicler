@@ -23,6 +23,10 @@ class WebRenderer(
     private val logger: Logger? = null,
 ) {
 
+    /** Supplies Standard.site verification (publication URI and per-issue document links). */
+    @Volatile
+    var standardSite: uk.ewancroft.chronicler.publish.StandardSitePublisher? = null
+
     /** Extra binary routes (the resource pack); returns null when the path is not handled. */
     @Volatile
     var assetProvider: ((String) -> ByteArray?)? = null
@@ -357,6 +361,15 @@ class WebRenderer(
             exchange.close()
             return
         }
+        if (path == "/.well-known/site.standard.publication") {
+            val uri = standardSite?.state?.publicationUri
+            if (uri == null) { exchange.sendResponseHeaders(404, -1); exchange.close(); return }
+            val bytes = uri.toByteArray(StandardCharsets.UTF_8)
+            exchange.responseHeaders.set("Content-Type", "text/plain; charset=utf-8")
+            exchange.sendResponseHeaders(200, bytes.size.toLong())
+            exchange.responseBody.use { it.write(bytes) }
+            return
+        }
         if (path == "/rss.xml" || path == "/rss") {
             handleRssRequest(exchange)
             return
@@ -367,6 +380,11 @@ class WebRenderer(
                 ?: "<html><body><h1>Issue not found</h1><a href=\"/archive\">Archive</a></body></html>"
             path == "/search" -> renderSearch(exchange.requestURI.rawQuery)
             else -> latestHtml
+        }.let { page ->
+            // Standard.site document verification: <link rel="site.standard.document" href="at://...">
+            val number = if (path.startsWith("/issue/")) path.removePrefix("/issue/").toIntOrNull() else latestNewspaper?.issueNumber
+            val uri = number?.let { standardSite?.documentUri(it) }
+            if (uri == null) page else page.replaceFirst("</head>", "<link rel=\"site.standard.document\" href=\"${escapeHtml(uri)}\">\n</head>")
         }
         val bytes = html.toByteArray(StandardCharsets.UTF_8)
         exchange.responseHeaders.set("Content-Type", "text/html; charset=utf-8")

@@ -27,6 +27,9 @@ import uk.ewancroft.chronicler.news.BookRenderer
 import uk.ewancroft.chronicler.news.EventStore
 import uk.ewancroft.chronicler.news.Newspaper
 import uk.ewancroft.chronicler.newsstand.Newsstands
+import uk.ewancroft.chronicler.publish.DiscordPublisher
+import uk.ewancroft.chronicler.publish.StandardSitePublisher
+import uk.ewancroft.chronicler.integration.DiscordSrvHook
 import uk.ewancroft.chronicler.news.NewspaperGenerator
 import uk.ewancroft.chronicler.news.Portraits
 import uk.ewancroft.chronicler.news.PrintShop
@@ -66,6 +69,9 @@ class Chronicler : JavaPlugin() {
 
     private var state: PluginState? = null
 
+    /** Issue numbers published this session whose printing should be announced. */
+    private val announceQueue = java.util.concurrent.ConcurrentHashMap.newKeySet<Int>()
+
     data class PluginState(
         val config: PluginConfig,
         val messages: Messages,
@@ -87,6 +93,8 @@ class Chronicler : JavaPlugin() {
         val packService: ResourcePackService,
         val printShop: PrintShop,
         val newsstands: Newsstands,
+        val standardSite: StandardSitePublisher,
+        val discord: DiscordPublisher,
         val contributionCommands: ContributionCommands?,
         val command: ChroniclerCommand,
     )
@@ -262,6 +270,7 @@ class Chronicler : JavaPlugin() {
             activationTime = activationTime,
             logsDir = dataFolder.parentFile?.parentFile?.toPath()?.resolve("logs"),
             onPublished = { issue ->
+                announceQueue += issue.issueNumber
                 contributions.markPrinted(issue.sections.flatMap { s -> s.stories.mapNotNull { it.sourceId } }.toSet())
             },
             onIssueReady = { issue ->
@@ -282,6 +291,18 @@ class Chronicler : JavaPlugin() {
             it.load()
         }
         printShop.onPrinted(newsstands::update)
+
+        val standardSite = StandardSitePublisher(cfg.standardSite, cfg.newspaper, dataPath.resolve("standard-site.json"), logger, printShop::baseUrl)
+        val discordSrv = server.pluginManager.getPlugin("DiscordSRV")?.takeIf { it.isEnabled }?.let(::DiscordSrvHook)
+        val discord = DiscordPublisher(cfg.discord, cfg.newspaper, logger, printShop::baseUrl, discordSrv?.let { hook -> hook::send })
+        // Only issues published while running are announced; restoring on start just re-prints.
+        printShop.onPrinted { printed ->
+            if (announceQueue.remove(printed.issue.issueNumber)) {
+                standardSite.publish(printed)
+                discord.publish(printed)
+            }
+        }
+        webRenderer?.standardSite = standardSite
 
         val contributionScreens = ContributionScreens(contributions, cfg.contributionLimits, cfg.newspaper.title)
         val contributionCommands = if (cfg.contributionsEnabled) ContributionCommands(
@@ -362,6 +383,8 @@ class Chronicler : JavaPlugin() {
             packService = packService,
             printShop = printShop,
             newsstands = newsstands,
+            standardSite = standardSite,
+            discord = discord,
             contributionCommands = contributionCommands,
             command = command,
         )
@@ -510,6 +533,17 @@ class Chronicler : JavaPlugin() {
     fun getContributionCommands(): ContributionCommands? = state?.contributionCommands
 
     fun getNewsstands(): Newsstands? = state?.newsstands
+
+    /** Re-sends the current issue to Standard.site and/or Discord (off the server thread). */
+    fun announceAgain(targets: Set<String>): Boolean {
+        val s = state ?: return false
+        val printed = s.printShop.latest ?: return false
+        Bukkit.getAsyncScheduler().runNow(this) { _ ->
+            if ("standard-site" in targets) s.standardSite.publish(printed)
+            if ("discord" in targets) s.discord.publish(printed)
+        }
+        return true
+    }
 
     fun getWebPort(): Int = state?.config?.web?.port ?: 0
 

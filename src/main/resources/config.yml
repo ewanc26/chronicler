@@ -126,6 +126,33 @@ newspaper:
 editor:
   review-required: false
 
+# Send each new issue beyond the server. Both need web.public-url so links
+# and images resolve for people outside the game.
+publish:
+  # Publish issues as Standard.site documents on AT Protocol (readable in
+  # Standard.site readers; optionally announced on Bluesky). The site is
+  # verified automatically: the web server serves
+  # /.well-known/site.standard.publication and per-issue <link> tags.
+  standard-site:
+    enabled: false
+    # Handle (e.g. news.example.com) or DID of the publishing account.
+    identifier: ""
+    # An app password (Settings > Privacy and security > App passwords),
+    # never your account password.
+    app-password: ""
+    # Leave blank to find the account's PDS from its handle/DID.
+    pds-url: ""
+    announce-on-bluesky: false
+  # Post each new issue to a Discord channel with the front page attached.
+  discord:
+    enabled: false
+    # Channel settings > Integrations > Webhooks > New webhook > Copy URL.
+    webhook-url: ""
+    # Optional: "@here" or a role mention like "<@&123456789012345678>".
+    mention: ""
+    # With no webhook, post a link through DiscordSRV's main channel.
+    use-discordsrv: true
+
 # Letters to the editor, classified adverts and the reader poll.
 contributions:
   enabled: true

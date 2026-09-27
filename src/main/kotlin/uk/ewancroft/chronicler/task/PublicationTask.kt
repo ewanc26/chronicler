@@ -298,8 +298,9 @@ class PublicationTask(
 
             webRenderer?.renderAndServe(newspaper)
             if (webRenderer != null) logger.info("Rendered web edition for issue #$number.")
-            onIssueReady(newspaper)
+            // onPublished first: the async print started by onIssueReady relies on it having run.
             onPublished(newspaper)
+            onIssueReady(newspaper)
 
             lastPublishTime = toTime
             lastPublishGameTime = currentGameTime()

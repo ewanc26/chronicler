@@ -109,6 +109,8 @@ class PluginConfig(private val config: FileConfiguration) {
     val newspaper: NewspaperConfig
     val web: WebConfig
     val reader: ReaderConfig
+    val standardSite: uk.ewancroft.chronicler.publish.StandardSiteConfig
+    val discord: uk.ewancroft.chronicler.publish.DiscordConfig
     val contributionsEnabled: Boolean
     val contributionLimits: uk.ewancroft.chronicler.contrib.ContributionLimits
     val configVersion: Int
@@ -197,6 +199,19 @@ class PluginConfig(private val config: FileConfiguration) {
             packRequired = config.getBoolean("reader.resource-pack.required", false),
             packPrompt = config.getString("reader.resource-pack.prompt", "") ?: "",
             pageWidth = (config.getInt("reader.page-width", 336).coerceIn(256, 512) / 8) * 8,
+        )
+        standardSite = uk.ewancroft.chronicler.publish.StandardSiteConfig(
+            enabled = config.getBoolean("publish.standard-site.enabled", false),
+            identifier = config.getString("publish.standard-site.identifier", "")?.trim().orEmpty().removePrefix("@"),
+            appPassword = config.getString("publish.standard-site.app-password", "")?.trim().orEmpty(),
+            pdsUrl = config.getString("publish.standard-site.pds-url", "")?.trim().orEmpty(),
+            announce = config.getBoolean("publish.standard-site.announce-on-bluesky", false),
+        )
+        discord = uk.ewancroft.chronicler.publish.DiscordConfig(
+            enabled = config.getBoolean("publish.discord.enabled", false),
+            webhookUrl = config.getString("publish.discord.webhook-url", "")?.trim().orEmpty(),
+            mention = config.getString("publish.discord.mention", "")?.trim().orEmpty(),
+            useDiscordSrv = config.getBoolean("publish.discord.use-discordsrv", true),
         )
         contributionsEnabled = config.getBoolean("contributions.enabled", true)
         contributionLimits = uk.ewancroft.chronicler.contrib.ContributionLimits(

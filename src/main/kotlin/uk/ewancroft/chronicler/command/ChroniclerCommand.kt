@@ -38,6 +38,15 @@ class ChroniclerCommand(
             "diagnostics" -> diagnostics(sender)
             "pack" -> packCommand(sender, args)
             "newsstand" -> newsstandCommand(sender, args)
+            "announce" -> {
+                if (!sender.hasPermission("chronicler.admin")) return deny(sender)
+                val target = args.getOrNull(1)?.lowercase() ?: "all"
+                val targets = if (target == "all") setOf("standard-site", "discord") else setOf(target)
+                sender.sendMessage(net.kyori.adventure.text.Component.text(
+                    if (plugin.announceAgain(targets)) "Re-sending the current issue to ${targets.joinToString(" and ")}; see the console for the result."
+                    else "There is no printed issue to send yet."))
+                true
+            }
             "write", "poll", "submissions" -> {
                 val contrib = plugin.getContributionCommands()
                 val rest = args.drop(1)
@@ -62,7 +71,7 @@ class ChroniclerCommand(
         args: Array<out String>,
     ): List<String> {
         if (args.size == 1) {
-            val cmds = listOf("read", "web", "latest", "reload", "status", "publish", "stats", "subscribe", "archive", "editor", "diagnostics", "pack", "newsstand", "write", "poll", "submissions", "test", "help")
+            val cmds = listOf("read", "web", "latest", "reload", "status", "publish", "stats", "subscribe", "archive", "editor", "diagnostics", "pack", "newsstand", "announce", "write", "poll", "submissions", "test", "help")
             return cmds.filter { it.startsWith(args[0], true) }
         }
         if (args[0].lowercase() == "stats" && args.size == 2) {
@@ -82,6 +91,9 @@ class ChroniclerCommand(
         }
         if (args[0].lowercase() == "submissions" && args.size == 2) {
             return listOf("approve", "reject").filter { it.startsWith(args[1], true) }
+        }
+        if (args[0].lowercase() == "announce" && args.size == 2) {
+            return listOf("all", "standard-site", "discord").filter { it.startsWith(args[1], true) }
         }
         if (args[0].lowercase() == "newsstand" && args.size == 2) {
             return listOf("create", "remove", "list").filter { it.startsWith(args[1], true) }
