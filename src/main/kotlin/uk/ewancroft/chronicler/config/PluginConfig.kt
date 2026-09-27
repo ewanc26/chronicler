@@ -57,6 +57,8 @@ data class NewspaperConfig(
     val serverName: String = "",
     /** Language tag for dates on printed pages and books (the reader uses each player's own). */
     val locale: String = "en-GB",
+    /** "auto" (online-mode servers only), "true" or "false". */
+    val portraits: String = "auto",
 ) {
     val javaLocale: java.util.Locale get() = java.util.Locale.forLanguageTag(locale)
 
@@ -178,6 +180,7 @@ class PluginConfig(private val config: FileConfiguration) {
             secondaryTextColor = color(config.getString("newspaper.colors.secondary"), 0x3D342A),
             mutedTextColor = color(config.getString("newspaper.colors.muted"), 0x5C4F40),
             serverName = config.getString("newspaper.server-name", "")?.trim().orEmpty(),
+            portraits = (config.getString("newspaper.portraits", "auto") ?: "auto").lowercase(),
             locale = config.getString("newspaper.locale", "en-GB")?.trim().takeUnless { it.isNullOrEmpty() } ?: "en-GB",
         )
         web = WebConfig(

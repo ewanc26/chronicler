@@ -26,7 +26,18 @@ class NewspaperTypesetterTest {
 
     @Test
     fun `typesets full-size pages and writes previews`() {
-        val pages = NewspaperTypesetter(config).typeset(sample())
+        // Sample faces so the preview shows portraits: a skin-tone face with hair and eyes.
+        val faces = listOf("Scribe", "Alex", "Steve", "Notch", "Herobrine").mapIndexed { i, name ->
+            name to java.awt.image.BufferedImage(8, 8, java.awt.image.BufferedImage.TYPE_INT_ARGB).apply {
+                val g = createGraphics()
+                g.color = java.awt.Color(0xC6 - i * 12, 0x96 - i * 8, 0x6C); g.fillRect(0, 0, 8, 8)
+                g.color = java.awt.Color(0x3B + i * 20, 0x2A, 0x1A); g.fillRect(0, 0, 8, 2 + i % 2)
+                g.color = java.awt.Color.WHITE; g.fillRect(1, 4, 2, 1); g.fillRect(5, 4, 2, 1)
+                g.color = java.awt.Color(0x30, 0x40, 0x90); g.fillRect(2, 4, 1, 1); g.fillRect(5, 4, 1, 1)
+                g.dispose()
+            }
+        }.toMap()
+        val pages = NewspaperTypesetter(config).typeset(sample(), faces)
         assertTrue(pages.isNotEmpty())
         val out = File("build/newspaper-preview").apply { mkdirs() }
         pages.forEachIndexed { i, page ->

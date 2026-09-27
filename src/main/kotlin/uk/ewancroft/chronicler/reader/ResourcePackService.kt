@@ -13,6 +13,7 @@ import uk.ewancroft.chronicler.integration.ClientSupport
 import uk.ewancroft.chronicler.news.Newspaper
 import uk.ewancroft.chronicler.news.NewspaperPack
 import uk.ewancroft.chronicler.news.NewspaperTypesetter
+import uk.ewancroft.chronicler.news.Portraits
 import uk.ewancroft.chronicler.util.writeAtomically
 import java.net.URI
 import java.nio.file.Files
@@ -40,6 +41,17 @@ class ResourcePackService(
         private set
 
     private val loaded = ConcurrentHashMap<UUID, UUID>()
+
+    private val portraits = Portraits(webDir.resolveSibling("portraits"), logger, skinUrl = { name ->
+        // Blocking Mojang profile lookup; rebuild() already runs off the server thread.
+        Bukkit.createProfile(name).takeIf { it.complete(true) }?.textures?.skin
+    })
+
+    private fun portraitsEnabled(): Boolean = when (config.newspaper.portraits) {
+        "true", "on", "yes" -> true
+        "false", "off", "no" -> false
+        else -> Bukkit.getOnlineMode()
+    }
     private val offered = ConcurrentHashMap<UUID, UUID>()
     private var warnedNoUrl = false
 
@@ -50,7 +62,10 @@ class ResourcePackService(
         if (!enabled) return
         try {
             val started = System.currentTimeMillis()
-            val pages = NewspaperTypesetter(config.newspaper).typeset(newspaper)
+            val faces = if (portraitsEnabled()) {
+                portraits.facesFor(newspaper.sections.flatMap { s -> s.stories.flatMap { it.players } })
+            } else emptyMap()
+            val pages = NewspaperTypesetter(config.newspaper).typeset(newspaper, faces)
             val built = NewspaperPack(
                 tileGuiSize = config.reader.tileGuiSize,
                 inks = NewspaperTypesetter.inks(config.newspaper.accentColor),

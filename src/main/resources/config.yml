@@ -100,6 +100,10 @@ newspaper:
   # Language for dates on printed pages and books (e.g. en-GB, en-US, de-DE).
   # The in-game reader shows dates in each player's own client language.
   locale: "en-GB"
+  # Print players' skin faces as photographs on the typeset pages.
+  # auto: only on online-mode servers (offline-mode names may belong to
+  # someone else's Mojang account). true / false to force.
+  portraits: auto
   # Max stories per section (only used when LLM is disabled).
   stories-per-section: 5
   # Include raw statistics page.

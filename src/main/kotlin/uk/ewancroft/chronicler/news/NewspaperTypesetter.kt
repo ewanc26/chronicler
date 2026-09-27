@@ -63,7 +63,11 @@ class NewspaperTypesetter(
 
     private val scratch = BufferedImage(1, 1, BufferedImage.TYPE_INT_RGB).createGraphics().also(::applyHints)
 
-    fun typeset(newspaper: Newspaper): List<BufferedImage> {
+    /** Player faces for the issue being typeset, keyed by player name. */
+    private var portraits: Map<String, BufferedImage> = emptyMap()
+
+    fun typeset(newspaper: Newspaper, portraits: Map<String, BufferedImage> = emptyMap()): List<BufferedImage> {
+        this.portraits = portraits
         val sections = newspaper.sections.filter { it.stories.isNotEmpty() }
         val lead = sections.firstOrNull()?.stories?.firstOrNull()
         val stories = sections.flatMap { section ->
@@ -156,6 +160,21 @@ class NewspaperTypesetter(
             }
             centre(g, credit, y + 16)
             y += 30
+            // A captioned strip of those involved, like press photographs.
+            val faces = lead.players.mapNotNull { name -> portraits[name]?.let { name to it } }.take(6)
+            if (faces.isNotEmpty()) {
+                val size = 72
+                val gap = 26
+                val total = faces.size * size + (faces.size - 1) * gap
+                var x = (PAGE_WIDTH - total) / 2
+                for ((name, face) in faces) {
+                    drawPortrait(g, face, x, y, size)
+                    g.font = byline; g.color = muted
+                    g.drawString(name, x + (size - g.fontMetrics.stringWidth(name)) / 2, y + size + 18)
+                    x += size + gap
+                }
+                y += size + 30
+            }
             rule(g, y, 1f); y += 18
         }
         return y
@@ -201,10 +220,23 @@ class NewspaperTypesetter(
                     g.drawString(line, x + (w - g.fontMetrics.stringWidth(line)) / 2, y + hm.ascent)
                 }
             }
-            out += Fragment(24, keepWithNext = true) { g, x, y, w ->
-                g.font = byline; g.color = muted
-                val text = "By ${story.byline}"
-                g.drawString(text, x + (w - g.fontMetrics.stringWidth(text)) / 2, y + 17)
+            val face = story.players.firstNotNullOfOrNull { portraits[it] }
+            out += if (face != null) {
+                // Portrait beside the byline, naming who the story features.
+                val featured = story.players.first { portraits[it] != null }
+                Fragment(58, keepWithNext = true) { g, x, y, w ->
+                    drawPortrait(g, face, x, y + 4, 48)
+                    g.font = byline; g.color = muted
+                    g.drawString("By ${story.byline}", x + 60, y + 24)
+                    g.font = byline.deriveFont(java.awt.Font.BOLD)
+                    g.drawString(featured, x + 60, y + 44)
+                }
+            } else {
+                Fragment(24, keepWithNext = true) { g, x, y, w ->
+                    g.font = byline; g.color = muted
+                    val text = "By ${story.byline}"
+                    g.drawString(text, x + (w - g.fontMetrics.stringWidth(text)) / 2, y + 17)
+                }
             }
             out += paragraph(story.body, dropCap = false)
             if (story.players.isNotEmpty()) {
@@ -393,6 +425,32 @@ class NewspaperTypesetter(
             i++
         }
         return placed to emptyList()
+    }
+
+    /**
+     * Draws an 8x8 skin face as a duotone newsprint photograph: luminance mapped
+     * from ink to paper, blown up with hard pixel edges, in a thin ink frame.
+     */
+    private fun drawPortrait(g: Graphics2D, face: BufferedImage, x: Int, y: Int, size: Int) {
+        val cell = size / 8
+        for (py in 0 until 8) for (px in 0 until 8) {
+            val argb = face.getRGB(px * face.width / 8, py * face.height / 8)
+            val alpha = argb ushr 24
+            val lum = if (alpha < 16) 1f else {
+                val r = argb shr 16 and 0xFF; val gr = argb shr 8 and 0xFF; val b = argb and 0xFF
+                (0.3f * r + 0.59f * gr + 0.11f * b) / 255f
+            }
+            val t = 0.08f + lum * 0.84f
+            g.color = Color(
+                (INK.red + (PAPER.red - INK.red) * t).toInt(),
+                (INK.green + (PAPER.green - INK.green) * t).toInt(),
+                (INK.blue + (PAPER.blue - INK.blue) * t).toInt(),
+            )
+            g.fillRect(x + px * cell, y + py * cell, cell, cell)
+        }
+        g.color = INK
+        g.stroke = BasicStroke(1.5f)
+        g.drawRect(x, y, cell * 8, cell * 8)
     }
 
     // ---- Helpers -----------------------------------------------------------
