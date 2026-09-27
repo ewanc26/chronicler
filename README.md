@@ -16,7 +16,7 @@ A PaperMC plugin that tracks server events and generates a dynamic in-game newsp
 - **Web View** — Optional embedded HTTP server serves a styled HTML version of each issue with dark/light theme toggle and RSS feed
 - **Editorial Workflow** — Create, preview, edit, remove stories from, and approve persistent draft issues
 - **Newspaper Layout** — Ranked articles with configurable bylines, tone, section order, colours, and clean continuation pages
-- **Privacy Controls** — Exclude players and redact private messages, chat excerpts, and coordinates
+- **Privacy Controls** — Exclude players and redact private messages, chat excerpts, and coordinates; with chat excerpts off, chat text is never stored at all
 - **Archive & Search** — Retention policies, import/export, web issue navigation, permalinks, and full-text search
 - **Safe Updates** — Automatic GitHub release updates with mandatory SHA-256 verification
 - **PlaceholderAPI** — 13+ placeholders exposing issue stats, player playtime, login streaks

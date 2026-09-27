@@ -307,6 +307,19 @@ class NewspaperGeneratorTest {
     }
 
     @Test
+    fun `privacy redaction keeps death causes but strips player text`() {
+        store.record(event(EventType.DEATH, player = "Steve", details = mapOf("message" to "Steve was blown up by Creeper")))
+        store.record(event(EventType.CHAT, player = "Alex", details = mapOf("message" to "my base is at 100 64 200")))
+        store.record(event(EventType.SIGN_EDIT, player = "Alex", details = mapOf("text" to "Private | Keep out")))
+        val newspaper = NewspaperGenerator(store, config, null, false, logger).generate(1, 0L, System.currentTimeMillis())
+        val copy = newspaper.sections.flatMap { it.stories }.joinToString("\n") { it.headline + " " + it.body }
+
+        assertTrue("Steve was blown up by Creeper" in copy, copy)
+        assertTrue("my base" !in copy)
+        assertTrue("Keep out" !in copy)
+    }
+
+    @Test
     fun `llm falls back to template when provider returns null`() {
         store.record(event(EventType.DEATH, player = "ewanc26", details = mapOf("message" to "ewanc26 fell")))
         val fake = FakeLlmProvider(headline = "FakeLLM")

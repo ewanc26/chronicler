@@ -181,7 +181,7 @@ class Chronicler : JavaPlugin() {
             PrivateMessageTracker(eventStore, cfg.tracking),
             BreakingNewsTracker(eventStore, cfg),
             economyTracker,
-            ActivityTracker(eventStore, cfg.tracking),
+            ActivityTracker(eventStore, cfg.tracking, storeChatText = cfg.privacy.includeChatExcerpts),
             WorldTracker(eventStore, cfg.tracking),
             EntityTracker(eventStore, cfg.tracking),
             CombatTracker(eventStore, cfg.tracking),

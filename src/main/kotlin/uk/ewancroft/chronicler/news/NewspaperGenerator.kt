@@ -807,9 +807,12 @@ class NewspaperGenerator(
     }
 
     private fun redactEvent(event: ChronicleEvent): ChronicleEvent {
+        // Only free text written by players counts as an excerpt; system text
+        // such as death messages shares the "message" key but must survive.
+        val playerAuthored = event.type in PLAYER_AUTHORED_TEXT
         val details = event.details.filterKeys { key ->
             val normalized = key.lowercase()
-            (privacyConfig.includeChatExcerpts || normalized !in setOf("text", "message", "chat")) &&
+            (privacyConfig.includeChatExcerpts || !playerAuthored || normalized !in setOf("text", "message", "chat")) &&
                 (privacyConfig.includeCoordinates || normalized !in setOf("x", "y", "z", "coordinates", "location"))
         }
         return event.copy(details = details)
@@ -821,5 +824,9 @@ class NewspaperGenerator(
         EventType.PVP_KILL, EventType.DEATH, EventType.EXPLOSION, EventType.LIGHTNING -> 60
         EventType.BIOME_DISCOVERY, EventType.ORE_DISCOVERY, EventType.TRADE -> 40
         else -> 20
+    }
+
+    private companion object {
+        val PLAYER_AUTHORED_TEXT = setOf(EventType.CHAT, EventType.SIGN_EDIT, EventType.MESSAGE_SENT)
     }
 }

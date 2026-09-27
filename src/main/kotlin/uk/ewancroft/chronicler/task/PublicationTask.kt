@@ -61,7 +61,7 @@ class PublicationTask(
         if (issueNumber == 0 && lastPublishTime == 0L) {
             // First run — backfill from server logs if enabled
             if (config.backfillEnabled && logsDir != null) {
-                val parser = LogParser(logsDir, config.tracking, logger)
+                val parser = LogParser(logsDir, config.tracking, logger, storeChatText = config.privacy.includeChatExcerpts)
                 val parsedEvents = parser.parse(config.backfillMaxLogFiles)
                 if (parsedEvents.isNotEmpty()) {
                     store.recordAll(parsedEvents)

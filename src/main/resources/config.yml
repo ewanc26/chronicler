@@ -133,6 +133,9 @@ backfill:
 
 privacy:
   include-private-messages: false
+  # When false, chat text is never written to events.json (chat is still
+  # counted); sign text is kept but left out of issues. Death messages and
+  # other server text are unaffected.
   include-chat-excerpts: false
   include-coordinates: false
   excluded-players: []
