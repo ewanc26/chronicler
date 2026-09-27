@@ -84,15 +84,26 @@ class NewspaperPackTest {
             }
         }
         // Client: bitmap advance = round(width * height / textureHeight) + 1; draw top = baseline - ascent.
+        // Newlines start a new 9px line at x = 0. Rows must fit the wrap width even if
+        // negative advances are ignored when lines are measured.
         var x = 0
+        var line = 0
+        var positiveWidth = 0
         val placed = mutableListOf<Triple<String, Int, Int>>()
-        for (ch in built.pages[0].text) {
+        val page = built.pages[0]
+        for (ch in page.text) {
             val glyph = glyphs[ch]
-            if (glyph != null) {
-                placed += Triple(glyph.first, x, 7 - glyph.second)
-                x += tileGui + 1
-            } else x += spaces.getValue(ch)
+            when {
+                ch == '\n' -> { x = 0; line++; positiveWidth = 0 }
+                glyph != null -> {
+                    placed += Triple(glyph.first, x, line * 9 + 7 - glyph.second)
+                    x += tileGui + 1; positiveWidth += tileGui + 1
+                }
+                else -> x += spaces.getValue(ch)
+            }
+            assertTrue(positiveWidth <= page.guiWidth + page.guiWidth / 16 + 8, "a row would wrap")
         }
+        assertEquals(page.lines, line + 1)
         val original = pages[0]
         val cols = original.width / NewspaperPack.TILE
         assertEquals(original.width / NewspaperPack.TILE * (original.height / NewspaperPack.TILE), placed.size)

@@ -88,6 +88,8 @@ class BookRenderer(
                 DataComponentTypes.CUSTOM_MODEL_DATA,
                 CustomModelData.customModelData().addString(NewspaperPack.ITEM_MODEL_STRING).build(),
             )
+            // Written books shimmer like enchanted items; newsprint should not.
+            book.setData(DataComponentTypes.ENCHANTMENT_GLINT_OVERRIDE, false)
         } catch (_: UnsupportedOperationException) {
             // Test servers without data component support.
         }

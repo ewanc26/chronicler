@@ -18,7 +18,9 @@ import javax.imageio.ImageIO
  * Client constraints (26.1): glyphs are packed into 256x256 atlas textures, so
  * every glyph must be smaller than that; bitmap glyphs advance by their width
  * plus one pixel; and a provider's ascent may not exceed its height, although
- * it may be negative, which is how rows are stacked below the text baseline.
+ * it may be negative. Each tile row is its own text line (text wrapping does
+ * not honour negative advances, so a single long line gets broken up); a
+ * row's ascent cancels the 9px line pitch so rows butt together.
  */
 class NewspaperPack(
     /** On-screen (GUI pixel) size of each 128px tile; 42 shows a page 336 GUI px wide. */
@@ -36,8 +38,10 @@ class NewspaperPack(
 
         /** Private-use code points: tile glyphs count up from TILE_BASE; spaces sit at the top. */
         private const val TILE_BASE = 0xE000
-        const val BACKSPACE_ONE = ''
-        const val ROW_RETURN = ''
+        const val BACKSPACE_ONE = '\uF801'
+
+        /** Vanilla text line pitch in GUI pixels. */
+        const val LINE_HEIGHT = 9
 
         /** Fixed zip timestamps keep the archive, and so its SHA-1, stable for identical content. */
         private const val ZIP_TIME = 315_532_800_000L
@@ -51,7 +55,7 @@ class NewspaperPack(
     }
 
     /** Everything a reader needs to draw one page: the font to use and the glyph string. */
-    data class PageGlyphs(val font: String, val text: String, val guiWidth: Int, val guiHeight: Int)
+    data class PageGlyphs(val font: String, val text: String, val guiWidth: Int, val guiHeight: Int, val lines: Int)
 
     class Built(val issueNumber: Int, val zip: ByteArray, val sha1: String, val pages: List<PageGlyphs>) {
         val id: UUID get() = packId(issueNumber)
@@ -103,19 +107,19 @@ class NewspaperPack(
                     val ch = nextCodePoint++.toChar()
                     val file = "font/$fontName/r${r}c$c.png"
                     files["assets/$NAMESPACE/textures/$file"] = indexedPng(tile)
-                    // Row r sits r tiles below the baseline row; 7 is the default font ascent.
-                    val ascent = 7 - r * tileGuiSize
+                    // Row r is on text line r (already r * 9px down); drop it the rest of the way.
+                    val ascent = 7 - r * (tileGuiSize - LINE_HEIGHT)
                     providers += """{"type":"bitmap","file":"$NAMESPACE:$file","height":$tileGuiSize,"ascent":$ascent,"chars":["${escape(ch)}"]}"""
                     ch
                 }
                 text.append(glyph).append(BACKSPACE_ONE)
             }
-            if (r < rows - 1) text.append(ROW_RETURN)
+            if (r < rows - 1) text.append('\n')
         }
         val rowWidth = cols * tileGuiSize
-        providers += """{"type":"space","advances":{"${escape(BACKSPACE_ONE)}":-1,"${escape(ROW_RETURN)}":-$rowWidth}}"""
+        providers += """{"type":"space","advances":{"${escape(BACKSPACE_ONE)}":-1}}"""
         files["assets/$NAMESPACE/font/$fontName.json"] = """{"providers":[${providers.joinToString(",")}]}""".toByteArray()
-        return PageGlyphs("$NAMESPACE:$fontName", text.toString(), rowWidth, rows * tileGuiSize)
+        return PageGlyphs("$NAMESPACE:$fontName", text.toString(), rowWidth, rows * tileGuiSize, rows)
     }
 
     private fun packMeta(): String =

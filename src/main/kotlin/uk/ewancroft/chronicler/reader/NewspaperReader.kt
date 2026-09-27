@@ -54,9 +54,12 @@ class NewspaperReader(
             .font(Key.key(page.font))
             .color(NamedTextColor.WHITE)
             .shadowColor(ShadowColor.none())
-        // Glyph rows hang below the first line; reserve the page's height in blank lines.
-        val reserve = Component.text("\n".repeat((page.guiHeight + 8) / 9))
-        val body = DialogBody.plainMessage(Component.text().append(image).append(reserve).build(), page.guiWidth + 4)
+        // Each tile row occupies one 9px text line but draws taller; pad with blank
+        // lines so the dialog reserves the page's full height.
+        val totalLines = (page.guiHeight + 8) / 9
+        val reserve = Component.text("\n".repeat((totalLines - page.lines).coerceAtLeast(0) + 1))
+        // Headroom so line measurement (which may ignore the 1px backspaces) never wraps a row.
+        val body = DialogBody.plainMessage(Component.text().append(image).append(reserve).build(), wrapWidth(page))
 
         val buttons = buildList {
             add(button(if (index > 0) "◀ Page $index" else "◀", index > 0) { showPrinted(it, issue, pages, index - 1) })
@@ -153,6 +156,8 @@ class NewspaperReader(
         }
         return builder.build()
     }
+
+    private fun wrapWidth(page: NewspaperPack.PageGlyphs) = page.guiWidth + page.guiWidth / 16 + 8
 
     private fun title(issue: Newspaper, where: String): Component =
         Component.text("${config.title} — No. ${issue.issueNumber} — $where")
