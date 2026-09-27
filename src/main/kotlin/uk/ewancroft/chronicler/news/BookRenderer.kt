@@ -5,7 +5,11 @@ import net.kyori.adventure.text.event.ClickEvent
 import net.kyori.adventure.text.event.HoverEvent
 import net.kyori.adventure.text.format.TextColor
 import net.kyori.adventure.text.format.TextDecoration
+import io.papermc.paper.datacomponent.DataComponentTypes
+import io.papermc.paper.datacomponent.item.CustomModelData
 import org.bukkit.Material
+import org.bukkit.NamespacedKey
+import org.bukkit.persistence.PersistentDataType
 import org.bukkit.inventory.ItemStack
 import org.bukkit.inventory.meta.BookMeta
 import uk.ewancroft.chronicler.config.NewspaperConfig
@@ -31,6 +35,12 @@ class BookRenderer(
         /** Leaves a pixel of slack so rounding differences never trigger a client-side rewrap. */
         private const val WRAP_WIDTH = PAGE_WIDTH - 1
 
+        /** Identifies which issue a newspaper item holds. */
+        val ISSUE_KEY = NamespacedKey("chronicler", "issue_number")
+
+        fun issueNumberOf(item: ItemStack?): Int? =
+            item?.takeIf { it.type == Material.WRITTEN_BOOK }?.itemMeta?.persistentDataContainer?.get(ISSUE_KEY, PersistentDataType.INTEGER)
+
         /** A section's first story needs its header, headline, byline and a couple of body lines. */
         private const val MIN_LINES_FOR_STORY_START = 5
     }
@@ -51,8 +61,25 @@ class BookRenderer(
         meta.setAuthor(newspaperConfig.author)
         meta.setGeneration(BookMeta.Generation.ORIGINAL)
         meta.addPages(*layout(newspaper).map(::pageComponent).toTypedArray())
+        meta.persistentDataContainer.set(ISSUE_KEY, PersistentDataType.INTEGER, newspaper.issueNumber)
+        val lead = newspaper.sections.firstOrNull { it.stories.isNotEmpty() }?.stories?.first()
+        meta.lore(listOfNotNull(
+            Component.text("No. ${newspaper.issueNumber} · ${dateLine(newspaper.toTime)}", mutedText).decoration(TextDecoration.ITALIC, false),
+            lead?.let { Component.text("“${it.headline}”", secondaryText) },
+            Component.text("Right-click to read", accent).decoration(TextDecoration.ITALIC, false),
+        ))
 
         book.itemMeta = meta
+        // The resource pack swaps in the newspaper model for books carrying this tag;
+        // without the pack the item simply looks and reads like a written book.
+        try {
+            book.setData(
+                DataComponentTypes.CUSTOM_MODEL_DATA,
+                CustomModelData.customModelData().addString(NewspaperPack.ITEM_MODEL_STRING).build(),
+            )
+        } catch (_: UnsupportedOperationException) {
+            // Test servers without data component support.
+        }
         return book
     }
 

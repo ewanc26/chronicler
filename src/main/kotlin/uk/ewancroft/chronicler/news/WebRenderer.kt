@@ -23,6 +23,10 @@ class WebRenderer(
     private val logger: Logger? = null,
 ) {
 
+    /** Extra binary routes (the resource pack); returns null when the path is not handled. */
+    @Volatile
+    var assetProvider: ((String) -> ByteArray?)? = null
+
     private var server: HttpServer? = null
     private var executor: ExecutorService? = null
     private var latestHtml: String = "<html><body><h1>No newspaper published yet.</h1></body></html>"
@@ -341,6 +345,12 @@ class WebRenderer(
 
     private fun handleRequest(exchange: HttpExchange) {
         val path = exchange.requestURI.path
+        assetProvider?.invoke(path)?.let { bytes ->
+            exchange.responseHeaders.set("Content-Type", "application/zip")
+            exchange.sendResponseHeaders(200, bytes.size.toLong())
+            exchange.responseBody.use { it.write(bytes) }
+            return
+        }
         if (path == "/rss.xml" || path == "/rss") {
             handleRssRequest(exchange)
             return

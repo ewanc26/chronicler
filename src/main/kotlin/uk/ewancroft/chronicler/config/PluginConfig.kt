@@ -70,6 +70,21 @@ data class WebConfig(
     val writeFiles: Boolean,
 )
 
+data class ReaderConfig(
+    /** "newspaper" opens the typeset page reader; "book" keeps the classic written book. */
+    val mode: String,
+    val packEnabled: Boolean,
+    /** Base URL clients download the pack from, e.g. http://play.example.com:8080. */
+    val packPublicUrl: String,
+    val packRequired: Boolean,
+    val packPrompt: String,
+    /** On-screen width of a page in GUI pixels (a multiple of 8, 256-512). */
+    val pageWidth: Int,
+) {
+    val newspaperMode: Boolean get() = mode != "book"
+    val tileGuiSize: Int get() = pageWidth / 8
+}
+
 class PluginConfig(private val config: FileConfiguration) {
 
     var enabled: Boolean
@@ -82,6 +97,7 @@ class PluginConfig(private val config: FileConfiguration) {
     val llm: LlmConfig
     val newspaper: NewspaperConfig
     val web: WebConfig
+    val reader: ReaderConfig
     val configVersion: Int
     val tickerInterval: Long
     val papiEnabled: Boolean
@@ -158,6 +174,14 @@ class PluginConfig(private val config: FileConfiguration) {
             enabled = config.getBoolean("web.enabled", true),
             port = config.getInt("web.port", 8080).coerceIn(1024, 65535),
             writeFiles = config.getBoolean("web.write-files", true),
+        )
+        reader = ReaderConfig(
+            mode = (config.getString("reader.mode", "newspaper") ?: "newspaper").lowercase(),
+            packEnabled = config.getBoolean("reader.resource-pack.enabled", true),
+            packPublicUrl = (config.getString("reader.resource-pack.public-url", "") ?: "").trim().trimEnd('/'),
+            packRequired = config.getBoolean("reader.resource-pack.required", false),
+            packPrompt = config.getString("reader.resource-pack.prompt", "") ?: "",
+            pageWidth = (config.getInt("reader.page-width", 336).coerceIn(256, 512) / 8) * 8,
         )
         bStatsEnabled = config.getBoolean("bstats-enabled", true)
         autoUpdateEnabled = config.getBoolean("auto-update.enabled", true)

@@ -1,0 +1,174 @@
+{
+ "issueNumber": 12,
+ "fromTime": 1790000000000,
+ "toTime": 1790519055487,
+ "sections": [
+  {
+   "title": "Headlines",
+   "stories": [
+    {
+     "headline": "Creeper Blast Levels Spawn Bakery",
+     "body": "A creeper detonated beside the spawn bakery late on Tuesday evening, destroying the east wall and scattering loaves across the square, according to event records. Scribe, who had been tending the ovens, was caught in the blast and later respawned at the town bed. Witnesses reported that the structure had stood since the server’s first week and was a popular meeting place for new arrivals. Rebuilding work began within the hour, with volunteers hauling oak planks from the northern forest. The council has since asked residents to light the area more thoroughly after dark to deter further attacks.",
+     "players": [
+      "Scribe",
+      "Alex"
+     ],
+     "eventType": "EXPLOSION",
+     "byline": "Chronicler Staff"
+    },
+    {
+     "headline": "Nether Expedition Returns With Quartz",
+     "body": "A party of three returned from the Nether on Thursday carrying more than four stacks of quartz and a single ancient debris, the first recorded this season. Expedition leader Steve described the crossing as uneventful apart from a ghast that destroyed part of the return portal frame.",
+     "players": [
+      "Steve",
+      "Notch",
+      "Alex"
+     ],
+     "eventType": "PORTAL",
+     "byline": "Chronicler Staff"
+    }
+   ]
+  },
+  {
+   "title": "Obituaries",
+   "stories": [
+    {
+     "headline": "Scribe — 3 deaths",
+     "body": "Scribe was killed by a creeper near the bakery, drowned in the reservoir, and later fell from the clock tower scaffolding. Mourners laid a single poppy at the town bed.",
+     "players": [
+      "Scribe"
+     ],
+     "eventType": "DEATH",
+     "byline": "Chronicler Staff"
+    },
+    {
+     "headline": "Herobrine — 1 death",
+     "body": "Herobrine was slain by a skeleton while crossing the badlands at dusk.",
+     "players": [
+      "Herobrine"
+     ],
+     "eventType": "DEATH",
+     "byline": "Chronicler Staff"
+    }
+   ]
+  },
+  {
+   "title": "Achievements",
+   "stories": [
+    {
+     "headline": "We Need to Go Deeper",
+     "body": "Alex became the fourth resident to enter the Nether, lighting a portal in the eastern hills on Wednesday morning.",
+     "players": [
+      "Alex"
+     ],
+     "eventType": "ADVANCEMENT",
+     "byline": "Chronicler Staff"
+    },
+    {
+     "headline": "Acquire Hardware",
+     "body": "Notch smelted iron for the first time, marking the end of a notably long stone age.",
+     "players": [
+      "Notch"
+     ],
+     "eventType": "ADVANCEMENT",
+     "byline": "Chronicler Staff"
+    },
+    {
+     "headline": "Diamonds!",
+     "body": "Steve struck diamonds at level minus fifty-eight after a three-hour strip mine, and promptly announced it in chat.",
+     "players": [
+      "Steve"
+     ],
+     "eventType": "ORE_DISCOVERY",
+     "byline": "Chronicler Staff"
+    }
+   ]
+  },
+  {
+   "title": "Exploration & Building",
+   "stories": [
+    {
+     "headline": "Lighthouse Completed at Cape Scribe",
+     "body": "After nine days of work the stone lighthouse at Cape Scribe was finished on Saturday, its lantern room lit with sea lanterns salvaged from the ocean monument. Builders say the tower can be seen from the spawn docks on a clear night.",
+     "players": [
+      "Scribe",
+      "Alex"
+     ],
+     "eventType": "BLOCK_PLACE",
+     "byline": "Chronicler Staff"
+    }
+   ]
+  },
+  {
+   "title": "Community Life",
+   "stories": [
+    {
+     "headline": "Sign Posts",
+     "body": "Four new signs went up around the market this week, including a welcome notice at the north gate and a warning about the ravine.",
+     "players": [
+      "Alex",
+      "Scribe"
+     ],
+     "eventType": "SIGN_EDIT",
+     "byline": "Chronicler Staff"
+    },
+    {
+     "headline": "Chattiest: Steve",
+     "body": "Steve sent 212 messages this cycle, comfortably ahead of the field.",
+     "players": [
+      "Steve"
+     ],
+     "eventType": "CHAT",
+     "byline": "Chronicler Staff"
+    }
+   ]
+  },
+  {
+   "title": "Statistics",
+   "stories": [
+    {
+     "headline": "Active Players",
+     "body": "6 unique player(s) this cycle",
+     "players": [],
+     "eventType": null,
+     "byline": "Chronicler Staff"
+    },
+    {
+     "headline": "Total Events",
+     "body": "1,482 events recorded",
+     "players": [],
+     "eventType": null,
+     "byline": "Chronicler Staff"
+    },
+    {
+     "headline": "Logins",
+     "body": "41 total logins",
+     "players": [],
+     "eventType": null,
+     "byline": "Chronicler Staff"
+    },
+    {
+     "headline": "Deaths",
+     "body": "9 deaths",
+     "players": [],
+     "eventType": null,
+     "byline": "Chronicler Staff"
+    },
+    {
+     "headline": "Blocks Placed",
+     "body": "12,907 blocks",
+     "players": [],
+     "eventType": null,
+     "byline": "Chronicler Staff"
+    },
+    {
+     "headline": "Distance Walked",
+     "body": "48 km",
+     "players": [],
+     "eventType": null,
+     "byline": "Chronicler Staff"
+    }
+   ]
+  }
+ ]
+}

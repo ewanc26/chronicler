@@ -28,6 +28,9 @@ import uk.ewancroft.chronicler.news.NewspaperGenerator
 import uk.ewancroft.chronicler.news.ChronicleEvent
 import uk.ewancroft.chronicler.news.EventType
 import uk.ewancroft.chronicler.news.WebRenderer
+import uk.ewancroft.chronicler.reader.NewspaperReader
+import uk.ewancroft.chronicler.reader.ReaderListener
+import uk.ewancroft.chronicler.reader.ResourcePackService
 import uk.ewancroft.chronicler.task.HeadlineTicker
 import uk.ewancroft.chronicler.task.PublicationTask
 import uk.ewancroft.chronicler.tracker.ActivityTracker
@@ -70,11 +73,14 @@ class Chronicler : JavaPlugin() {
         val papiExpansion: ChroniclerExpansion?,
         val economyTracker: EconomyTracker?,
         val sessionTracker: SessionTracker,
+        val reader: NewspaperReader,
         val command: ChroniclerCommand,
     )
 
     override fun onEnable() {
         val activationTime = System.currentTimeMillis()
+        // The newspaper typesetter uses Java2D; never let it touch a display.
+        if (System.getProperty("java.awt.headless") == null) System.setProperty("java.awt.headless", "true")
         saveDefaultConfig()
         val messagesFile = File(dataFolder, "messages.yml")
         if (!messagesFile.exists()) {
@@ -169,6 +175,9 @@ class Chronicler : JavaPlugin() {
             null
         }
 
+        val packService = ResourcePackService(this, cfg, dataPath.resolve("web"), logger)
+        webRenderer?.assetProvider = packService::serve
+
         val economyTracker = EconomyTracker(eventStore, cfg.tracking).also {
             if (it.tryHook()) logger.info("Vault economy detected.")
         }
@@ -207,7 +216,16 @@ class Chronicler : JavaPlugin() {
             logger = logger,
             activationTime = activationTime,
             logsDir = dataFolder.parentFile?.parentFile?.toPath()?.resolve("logs"),
+            onIssueReady = { issue ->
+                if (packService.enabled) Bukkit.getAsyncScheduler().runNow(this) { _ -> packService.rebuild(issue) }
+            },
         ).also { it.start() }
+
+        val reader = NewspaperReader(cfg.newspaper, packService) { number ->
+            if (number == null) publicationTask.getLatestNewspaper()
+            else publicationTask.getLatestNewspaper()?.takeIf { it.issueNumber == number } ?: archiveStore.getIssue(number)
+        }
+        if (cfg.reader.newspaperMode) server.pluginManager.registerEvents(ReaderListener(reader, packService), this)
 
         server.pluginManager.registerEvents(object : org.bukkit.event.Listener {
             @org.bukkit.event.EventHandler
@@ -278,6 +296,7 @@ class Chronicler : JavaPlugin() {
             papiExpansion = papiExpansion,
             economyTracker = economyTracker,
             sessionTracker = sessionTracker,
+            reader = reader,
             command = command,
         )
     }
@@ -302,6 +321,7 @@ class Chronicler : JavaPlugin() {
             meta.persistentDataContainer.set(key, PersistentDataType.INTEGER, 1)
             book.itemMeta = meta
         }
+        if (s.config.reader.newspaperMode) s.reader.open(player)
         if (player.inventory.firstEmpty() == -1) {
             player.sendMessage(s.messages.inventoryFull())
             return

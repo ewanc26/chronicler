@@ -12,12 +12,14 @@ import java.util.logging.Logger
  * Writes [text] to a sibling temporary file and moves it over this path, so a
  * crash or full disk mid-write never leaves a truncated store behind.
  */
-fun Path.writeAtomically(text: String) {
+fun Path.writeAtomically(text: String) = writeAtomically(text.toByteArray(StandardCharsets.UTF_8))
+
+fun Path.writeAtomically(bytes: ByteArray) {
     val parent = toAbsolutePath().parent
     Files.createDirectories(parent)
     val temporary = Files.createTempFile(parent, "$fileName.", ".tmp")
     try {
-        Files.writeString(temporary, text, StandardCharsets.UTF_8)
+        Files.write(temporary, bytes)
         try {
             Files.move(temporary, this, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
         } catch (_: AtomicMoveNotSupportedException) {

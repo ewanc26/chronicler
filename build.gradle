@@ -73,6 +73,7 @@ processResources {
 
 tasks.named('test') {
     useJUnitPlatform()
+    systemProperty 'java.awt.headless', 'true'
 }
 
 build.dependsOn shadowJar

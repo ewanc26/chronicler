@@ -154,3 +154,25 @@ web:
   port: 8080
   # Write HTML to plugin folder even when serving.
   write-files: true
+
+# How players read an issue in-game.
+reader:
+  # newspaper: a typeset broadsheet page shown in a reader screen (uses the
+  #            resource pack below; players without it get a text edition).
+  # book:      the classic written book.
+  mode: newspaper
+  # On-screen page width in GUI pixels (256-512). 336 suits GUI scale 3 at 1080p.
+  page-width: 336
+  resource-pack:
+    # Serve Chronicler's resource pack (newspaper item art and printed pages)
+    # from the web server above, and offer it to players on join.
+    enabled: true
+    # Address players' clients download the pack from, e.g.
+    # "http://play.example.com:8080". Blank uses server-ip from
+    # server.properties; if that is blank too the pack is written to
+    # plugins/Chronicler/web/chronicler-pack.zip for you to host.
+    public-url: ""
+    # Kick players who decline the pack.
+    required: false
+    # Shown on the download prompt (MiniMessage). Blank uses the default.
+    prompt: ""

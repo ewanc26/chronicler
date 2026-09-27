@@ -39,6 +39,8 @@ class PublicationTask(
     private val logger: Logger,
     private val activationTime: Long,
     private val logsDir: Path? = null,
+    /** Called (on the server thread) whenever an issue becomes the current one. */
+    private val onIssueReady: (Newspaper) -> Unit = {},
 ) {
 
     private var issueNumber = 0
@@ -92,6 +94,7 @@ class PublicationTask(
             latestNewspaper = newspaper
             latestBook = bookRenderer.renderToBook(newspaper)
             webRenderer?.renderAndServe(newspaper)
+            onIssueReady(newspaper)
             logger.info("Restored issue #${newspaper.issueNumber} from the archive (${newspaper.sections.sumOf { it.stories.size }} stories).")
         } catch (e: Exception) {
             logger.log(Level.WARNING, "Failed to restore archived issue #${newspaper.issueNumber}.", e)
@@ -293,6 +296,7 @@ class PublicationTask(
 
             webRenderer?.renderAndServe(newspaper)
             if (webRenderer != null) logger.info("Rendered web edition for issue #$number.")
+            onIssueReady(newspaper)
 
             lastPublishTime = toTime
             lastPublishGameTime = currentGameTime()
