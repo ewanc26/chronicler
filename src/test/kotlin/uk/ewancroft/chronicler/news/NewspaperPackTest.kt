@@ -64,6 +64,20 @@ class NewspaperPackTest {
         assertEquals(NewspaperPack().build(3, pages).sha1, NewspaperPack().build(3, pages).sha1)
     }
 
+    /**
+     * A tile row must never exceed the body width it is rendered at, or the dialog
+     * re-splits it into two lines and reserves twice the height. The last tile's
+     * 1px spacing is not cancelled by a backspace, so a row can measure guiWidth + 1.
+     */
+    @Test
+    fun `body width always leaves room for a tile row`() {
+        for (tileGui in listOf(14, 21, 42, 64, 84)) {
+            NewspaperPack(tileGui).build(1, pages).pages.forEach { page ->
+                assertTrue(page.wrapWidth > page.guiWidth + 1, "tile $tileGui: ${page.wrapWidth} <= ${page.guiWidth} + 1")
+            }
+        }
+    }
+
     /** Lays the glyph string out with the client's rules and checks it rebuilds the page. */
     @Test
     fun `glyph layout reassembles the original page`() {

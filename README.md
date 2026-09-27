@@ -39,7 +39,8 @@ How it works:
 
 - Chronicler builds a small resource pack for the latest issue (about 250 KB per page) and serves it from the embedded web server. Players are offered it on join and after each new issue; it only ever replaces Chronicler's own pack.
 - Pages are drawn as bitmap-font glyphs inside a dialog, so no client mod is needed. The pack also gives newspapers their own item texture.
-- Players who decline the pack get a **text edition** with section-by-section navigation, and the item is still a normal written book, laid out to fit book pages exactly.
+- A multi-page issue gets page arrows, and a **Text edition** button in the printed reader switches the same issue to large-type dialog pages (and back), without reopening it.
+- Players who decline the pack get the same text edition automatically, with section-by-section navigation, and the item is still a normal written book, laid out to fit book pages exactly.
 - Old papers printed by earlier versions open in the reader too.
 
 Set `reader.resource-pack.public-url` to the address players reach your web server on (for example `http://play.example.com:8080`). If it is blank, `server-ip` is used; if that is blank too, the pack is written to `plugins/Chronicler/web/chronicler-pack.zip` for you to host or merge into your own server pack. Set `reader.mode: book` to keep the classic written book only.

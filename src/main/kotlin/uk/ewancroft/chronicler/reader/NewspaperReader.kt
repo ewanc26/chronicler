@@ -75,7 +75,7 @@ class NewspaperReader(
         val totalLines = (page.guiHeight + 8) / 9
         val reserve = Component.text("\n".repeat((totalLines - page.lines).coerceAtLeast(0) + 1))
         // Headroom so line measurement (which may ignore the 1px backspaces) never wraps a row.
-        val body = DialogBody.plainMessage(Component.text().append(image).append(reserve).build(), wrapWidth(page))
+        val body = DialogBody.plainMessage(Component.text().append(image).append(reserve).build(), page.wrapWidth)
 
         val buttons = buildList {
             add(button(if (index > 0) "◀ Page $index" else "◀", index > 0) { showPrinted(it, issue, pages, index - 1) })
@@ -172,8 +172,6 @@ class NewspaperReader(
         }
         return builder.build()
     }
-
-    private fun wrapWidth(page: NewspaperPack.PageGlyphs) = page.guiWidth + page.guiWidth / 16 + 8
 
     /**
      * afterAction NONE keeps the screen up while the next page is on its way,

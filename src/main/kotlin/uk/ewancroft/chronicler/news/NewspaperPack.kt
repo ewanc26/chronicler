@@ -55,7 +55,15 @@ class NewspaperPack(
     }
 
     /** Everything a reader needs to draw one page: the font to use and the glyph string. */
-    data class PageGlyphs(val font: String, val text: String, val guiWidth: Int, val guiHeight: Int, val lines: Int)
+    data class PageGlyphs(val font: String, val text: String, val guiWidth: Int, val guiHeight: Int, val lines: Int) {
+        /**
+         * Body width to render this page at. A tile row is [guiWidth] wide, but the
+         * client's line measurement can ignore the 1px backspaces between tiles and
+         * so measure a row as [guiWidth] + 1; the extra headroom stops a row being
+         * split across two lines, which would double the height the dialog reserves.
+         */
+        val wrapWidth: Int get() = guiWidth + guiWidth / 16 + 8
+    }
 
     class Built(val issueNumber: Int, val zip: ByteArray, val sha1: String, val pages: List<PageGlyphs>) {
         val id: UUID get() = packId(issueNumber)
