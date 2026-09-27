@@ -43,7 +43,7 @@ class NewspaperTypesetterTest {
         pages.forEachIndexed { i, page ->
             assertEquals(NewspaperTypesetter.PAGE_WIDTH, page.width)
             assertTrue(page.height <= NewspaperTypesetter.PAGE_HEIGHT && page.height % NewspaperPack.TILE == 0)
-            if (i == 0) assertEquals(NewspaperTypesetter.PAGE_HEIGHT, page.height)
+            if (i < pages.lastIndex) assertEquals(NewspaperTypesetter.PAGE_HEIGHT, page.height)
             ImageIO.write(page, "png", File(out, "page-${i + 1}.png"))
         }
     }

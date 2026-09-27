@@ -346,9 +346,15 @@ class WebRenderer(
     private fun handleRequest(exchange: HttpExchange) {
         val path = exchange.requestURI.path
         assetProvider?.invoke(path)?.let { bytes ->
-            exchange.responseHeaders.set("Content-Type", "application/zip")
+            exchange.responseHeaders.set("Content-Type", if (path.endsWith(".png")) "image/png" else "application/zip")
             exchange.sendResponseHeaders(200, bytes.size.toLong())
             exchange.responseBody.use { it.write(bytes) }
+            return
+        }
+        if (path.startsWith("/print/") || path.startsWith("/chronicler-pack/")) {
+            // Stale or unknown asset: a clear 404 rather than the HTML front page.
+            exchange.sendResponseHeaders(404, -1)
+            exchange.close()
             return
         }
         if (path == "/rss.xml" || path == "/rss") {

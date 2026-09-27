@@ -103,4 +103,19 @@ data class Story(
     val players: List<String>,
     val eventType: EventType?,
     val byline: String = "Chronicler Staff",
+    /** Reader contribution this story came from (a submission or poll), so publishing can mark it printed. */
+    val sourceId: String? = null,
+    /** Results when this story reports a reader poll. */
+    val poll: PollResult? = null,
 )
+
+/** "By Chronicler Staff" for reporting; reader contributions carry their own wording ("A letter from ..."). */
+val Story.credit: String get() = if (sourceId != null) byline else "By $byline"
+
+@Serializable
+data class PollResult(val options: List<PollOption>) {
+    val total: Int get() = options.sumOf { it.votes }
+}
+
+@Serializable
+data class PollOption(val label: String, val votes: Int)

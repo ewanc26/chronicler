@@ -41,6 +41,8 @@ class PublicationTask(
     private val logsDir: Path? = null,
     /** Called (on the server thread) whenever an issue becomes the current one. */
     private val onIssueReady: (Newspaper) -> Unit = {},
+    /** Called (on the server thread) only when a new issue has actually been published. */
+    private val onPublished: (Newspaper) -> Unit = {},
 ) {
 
     private var issueNumber = 0
@@ -297,6 +299,7 @@ class PublicationTask(
             webRenderer?.renderAndServe(newspaper)
             if (webRenderer != null) logger.info("Rendered web edition for issue #$number.")
             onIssueReady(newspaper)
+            onPublished(newspaper)
 
             lastPublishTime = toTime
             lastPublishGameTime = currentGameTime()

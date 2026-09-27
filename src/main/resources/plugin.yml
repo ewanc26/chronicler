@@ -16,6 +16,9 @@ permissions:
   chronicler.use:
     description: Read the newspaper.
     default: true
+  chronicler.write:
+    description: Send letters to the editor and classified adverts.
+    default: true
   chronicler.admin:
     description: Admin commands for Chronicler.
     default: op

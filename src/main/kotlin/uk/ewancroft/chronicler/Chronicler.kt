@@ -6,6 +6,8 @@ import org.bukkit.Bukkit
 import org.bukkit.NamespacedKey
 import org.bukkit.command.Command
 import org.bukkit.event.HandlerList
+import org.bukkit.permissions.Permission
+import org.bukkit.permissions.PermissionDefault
 import org.bukkit.entity.Player
 import org.bukkit.persistence.PersistentDataType
 import org.bukkit.plugin.java.JavaPlugin
@@ -28,6 +30,10 @@ import uk.ewancroft.chronicler.news.NewspaperGenerator
 import uk.ewancroft.chronicler.news.ChronicleEvent
 import uk.ewancroft.chronicler.news.EventType
 import uk.ewancroft.chronicler.news.WebRenderer
+import uk.ewancroft.chronicler.contrib.ContributionCommands
+import uk.ewancroft.chronicler.contrib.ContributionScreens
+import uk.ewancroft.chronicler.contrib.Contributions
+import uk.ewancroft.chronicler.integration.BedrockContributions
 import uk.ewancroft.chronicler.integration.ClientSupport
 import uk.ewancroft.chronicler.reader.NewspaperReader
 import uk.ewancroft.chronicler.reader.ReaderListener
@@ -76,6 +82,7 @@ class Chronicler : JavaPlugin() {
         val sessionTracker: SessionTracker,
         val reader: NewspaperReader,
         val packService: ResourcePackService,
+        val contributionCommands: ContributionCommands?,
         val command: ChroniclerCommand,
     )
 
@@ -88,6 +95,7 @@ class Chronicler : JavaPlugin() {
         if (!messagesFile.exists()) {
             saveResource("messages.yml", false)
         }
+        registerPermissions()
         val cfg = PluginConfig(config)
         if (cfg.bStatsEnabled) {
             Metrics(this, 23467)
@@ -96,6 +104,24 @@ class Chronicler : JavaPlugin() {
         state = buildState(activationTime)
         val s = state ?: return
         logger.info("Chronicler enabled. LLM: ${if (s.llmProvider != null) "${s.config.llm.provider} (${s.config.llm.model})" else "template mode"}. Web: ${if (s.config.web.enabled) "port ${s.config.web.port}" else "disabled"}.")
+    }
+
+    /**
+     * Paper ignores plugin.yml (including its permissions section) when
+     * paper-plugin.yml is present, and unregistered permissions are op-only,
+     * so without this ordinary players could not use /chronicler at all.
+     */
+    private fun registerPermissions() {
+        val defaults = listOf(
+            Triple("chronicler.use", "Read the newspaper.", PermissionDefault.TRUE),
+            Triple("chronicler.write", "Send letters to the editor and classified adverts.", PermissionDefault.TRUE),
+            Triple("chronicler.admin", "Admin commands for Chronicler.", PermissionDefault.OP),
+        )
+        for ((name, description, default) in defaults) {
+            if (server.pluginManager.getPermission(name) == null) {
+                server.pluginManager.addPermission(Permission(name, description, default))
+            }
+        }
     }
 
     override fun onDisable() {
@@ -157,6 +183,8 @@ class Chronicler : JavaPlugin() {
             }
         }
 
+        val contributions = Contributions(dataPath.resolve("contributions.json"), cfg.contributionLimits, logger).also { it.load() }
+
         val generator = NewspaperGenerator(
             store = eventStore,
             newspaperConfig = cfg.newspaper,
@@ -166,6 +194,7 @@ class Chronicler : JavaPlugin() {
             llmSystemPrompt = cfg.llm.systemPrompt,
             privacyConfig = cfg.privacy,
             llmAvailability = llmHealth?.let { health -> { health.refresh() } },
+            contributions = { if (cfg.contributionsEnabled) contributions.sectionsForPrint() else emptyList() },
         )
 
         val bookRenderer = BookRenderer(cfg.newspaper)
@@ -219,6 +248,9 @@ class Chronicler : JavaPlugin() {
             logger = logger,
             activationTime = activationTime,
             logsDir = dataFolder.parentFile?.parentFile?.toPath()?.resolve("logs"),
+            onPublished = { issue ->
+                contributions.markPrinted(issue.sections.flatMap { s -> s.stories.mapNotNull { it.sourceId } }.toSet())
+            },
             onIssueReady = { issue ->
                 if (packService.enabled) Bukkit.getAsyncScheduler().runNow(this) { _ -> packService.rebuild(issue) }
             },
@@ -229,6 +261,12 @@ class Chronicler : JavaPlugin() {
             else publicationTask.getLatestNewspaper()?.takeIf { it.issueNumber == number } ?: archiveStore.getIssue(number)
         }
         if (cfg.reader.newspaperMode) server.pluginManager.registerEvents(ReaderListener(reader, packService, cfg.newspaper, clients), this)
+
+        val contributionScreens = ContributionScreens(contributions, cfg.contributionLimits, cfg.newspaper.title)
+        val contributionCommands = if (cfg.contributionsEnabled) ContributionCommands(
+            contributions, contributionScreens, clients,
+            clients.floodgate?.let { BedrockContributions(it, contributions, contributionScreens) },
+        ) else null
 
         server.pluginManager.registerEvents(object : org.bukkit.event.Listener {
             @org.bukkit.event.EventHandler
@@ -301,6 +339,7 @@ class Chronicler : JavaPlugin() {
             sessionTracker = sessionTracker,
             reader = reader,
             packService = packService,
+            contributionCommands = contributionCommands,
             command = command,
         )
     }
@@ -444,6 +483,8 @@ class Chronicler : JavaPlugin() {
     }
 
     fun getPackService(): ResourcePackService? = state?.packService
+
+    fun getContributionCommands(): ContributionCommands? = state?.contributionCommands
 
     fun getWebPort(): Int = state?.config?.web?.port ?: 0
 

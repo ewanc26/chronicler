@@ -109,6 +109,8 @@ class PluginConfig(private val config: FileConfiguration) {
     val newspaper: NewspaperConfig
     val web: WebConfig
     val reader: ReaderConfig
+    val contributionsEnabled: Boolean
+    val contributionLimits: uk.ewancroft.chronicler.contrib.ContributionLimits
     val configVersion: Int
     val tickerInterval: Long
     val papiEnabled: Boolean
@@ -195,6 +197,11 @@ class PluginConfig(private val config: FileConfiguration) {
             packRequired = config.getBoolean("reader.resource-pack.required", false),
             packPrompt = config.getString("reader.resource-pack.prompt", "") ?: "",
             pageWidth = (config.getInt("reader.page-width", 336).coerceIn(256, 512) / 8) * 8,
+        )
+        contributionsEnabled = config.getBoolean("contributions.enabled", true)
+        contributionLimits = uk.ewancroft.chronicler.contrib.ContributionLimits(
+            requireApproval = config.getBoolean("contributions.require-approval", true),
+            maxPendingPerPlayer = config.getInt("contributions.max-pending-per-player", 2).coerceIn(1, 20),
         )
         bStatsEnabled = config.getBoolean("bstats-enabled", true)
         autoUpdateEnabled = config.getBoolean("auto-update.enabled", true)

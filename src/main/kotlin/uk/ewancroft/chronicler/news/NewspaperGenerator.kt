@@ -20,6 +20,8 @@ class NewspaperGenerator(
      * goes away falls back to template copy without a request per section.
      */
     private val llmAvailability: (() -> Boolean)? = null,
+    /** Reader contributions (letters, classifieds, poll results) to print alongside the news. */
+    private val contributions: () -> List<NewspaperSection> = { emptyList() },
 ) {
     private val maxStories = newspaperConfig.storiesPerSection
 
@@ -59,6 +61,9 @@ class NewspaperGenerator(
         sections.addAll(generateWorldEvents(events))
         sections.addAll(generateCommunityLife(events))
         sections.addAll(generateAdventures(events))
+        sections.addAll(runCatching(contributions).getOrElse {
+            logger.warning("Could not collect reader contributions: ${it.message}"); emptyList()
+        })
         if (newspaperConfig.showStatistics) {
             sections.add(generateStatistics(events))
         }
@@ -803,7 +808,9 @@ class NewspaperGenerator(
         val headline = story.headline.trim().replace(Regex("[\\r\\n]+"), " ").take(60).ifBlank { "News Brief" }
         val body = story.body.trim().replace(Regex("\\s+"), " ").ifBlank { "No further details were available at press time." }
         val completeBody = if (body.last() in ".!?") body else "$body."
-        return story.copy(headline = headline, body = completeBody, byline = newspaperConfig.byline)
+        // Reader contributions keep their own credit ("A letter from ...").
+        val credit = if (story.sourceId != null) story.byline else newspaperConfig.byline
+        return story.copy(headline = headline, body = completeBody, byline = credit)
     }
 
     private fun redactEvent(event: ChronicleEvent): ChronicleEvent {

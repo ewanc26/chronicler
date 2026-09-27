@@ -17,6 +17,7 @@ import org.bukkit.entity.Player
 import uk.ewancroft.chronicler.config.NewspaperConfig
 import uk.ewancroft.chronicler.news.MinecraftFont
 import uk.ewancroft.chronicler.news.Newspaper
+import uk.ewancroft.chronicler.news.credit
 import uk.ewancroft.chronicler.news.NewspaperPack
 import org.bukkit.inventory.ItemStack
 import uk.ewancroft.chronicler.integration.BedrockReader
@@ -124,7 +125,7 @@ class NewspaperReader(
                 Component.text()
                     .append(Component.text(story.body, NamedTextColor.GRAY))
                     .append(Component.newline())
-                    .append(Component.text("By ${story.byline}", muted, TextDecoration.ITALIC))
+                    .append(Component.text(story.credit, muted, TextDecoration.ITALIC))
                     .build(),
                 320,
             )

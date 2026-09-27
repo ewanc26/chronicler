@@ -149,7 +149,7 @@ class BookRenderer(
             val storyLines = mutableListOf<Line>()
             if (index > 0) storyLines += blank()
             storyLines += text(story.headline, primaryText, bold = true)
-            storyLines += text("By ${story.byline}", mutedText, italic = true)
+            storyLines += text(story.credit, mutedText, italic = true)
             storyLines += text(story.body, secondaryText)
             if (story.players.isNotEmpty()) storyLines += text("Filed under: ${story.players.joinToString(", ")}", mutedText)
 

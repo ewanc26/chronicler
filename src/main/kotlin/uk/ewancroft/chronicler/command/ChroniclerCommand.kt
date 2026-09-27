@@ -37,6 +37,17 @@ class ChroniclerCommand(
             "editor" -> editor(sender, args)
             "diagnostics" -> diagnostics(sender)
             "pack" -> packCommand(sender, args)
+            "write", "poll", "submissions" -> {
+                val contrib = plugin.getContributionCommands()
+                val rest = args.drop(1)
+                when {
+                    contrib == null -> sender.sendMessage(net.kyori.adventure.text.Component.text("Reader contributions are turned off."))
+                    args[0].equals("write", true) -> contrib.write(sender, rest)
+                    args[0].equals("poll", true) -> contrib.poll(sender, rest)
+                    else -> contrib.submissions(sender, rest)
+                }
+                true
+            }
             "test" -> runTestCommand(sender, args)
             "help" -> { sendHelp(sender); true }
             else -> { sendHelp(sender); true }
@@ -50,7 +61,7 @@ class ChroniclerCommand(
         args: Array<out String>,
     ): List<String> {
         if (args.size == 1) {
-            val cmds = listOf("read", "web", "latest", "reload", "status", "publish", "stats", "subscribe", "archive", "editor", "diagnostics", "pack", "test", "help")
+            val cmds = listOf("read", "web", "latest", "reload", "status", "publish", "stats", "subscribe", "archive", "editor", "diagnostics", "pack", "write", "poll", "submissions", "test", "help")
             return cmds.filter { it.startsWith(args[0], true) }
         }
         if (args[0].lowercase() == "stats" && args.size == 2) {
@@ -61,6 +72,15 @@ class ChroniclerCommand(
         }
         if (args[0].lowercase() == "editor" && args.size == 2) {
             return listOf("create", "preview", "remove", "edit", "publish").filter { it.startsWith(args[1], true) }
+        }
+        if (args[0].lowercase() == "write" && args.size == 2) {
+            return listOf("letter", "ad").filter { it.startsWith(args[1], true) }
+        }
+        if (args[0].lowercase() == "poll" && args.size == 2) {
+            return listOf("vote", "create", "cancel", "results").filter { it.startsWith(args[1], true) }
+        }
+        if (args[0].lowercase() == "submissions" && args.size == 2) {
+            return listOf("approve", "reject").filter { it.startsWith(args[1], true) }
         }
         if (args[0].lowercase() == "pack" && args.size == 2) {
             return listOf("status", "export").filter { it.startsWith(args[1], true) }

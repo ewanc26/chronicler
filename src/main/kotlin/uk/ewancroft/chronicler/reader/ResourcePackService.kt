@@ -40,6 +40,11 @@ class ResourcePackService(
     var current: NewspaperPack.Built? = null
         private set
 
+    /** The current issue's typeset pages as PNGs, for the web, Discord and cover images. */
+    @Volatile
+    var printedPages: List<ByteArray> = emptyList()
+        private set
+
     private val loaded = ConcurrentHashMap<UUID, UUID>()
 
     private val portraits = Portraits(webDir.resolveSibling("portraits"), logger, skinUrl = { name ->
@@ -72,6 +77,9 @@ class ResourcePackService(
             ).build(newspaper.issueNumber, pages)
             Files.createDirectories(webDir)
             webDir.resolve("chronicler-pack.zip").writeAtomically(built.zip)
+            printedPages = pages.map { page ->
+                java.io.ByteArrayOutputStream().also { javax.imageio.ImageIO.write(page, "png", it) }.toByteArray()
+            }
             current = built
             logger.info("Printed issue #${newspaper.issueNumber}: ${pages.size} page(s), pack ${built.zip.size / 1024} KB in ${System.currentTimeMillis() - started}ms.")
             Bukkit.getGlobalRegionScheduler().run(plugin) { _ -> Bukkit.getOnlinePlayers().forEach(::offer) }
@@ -83,7 +91,18 @@ class ResourcePackService(
     /** The web server hands requests for /chronicler-pack/<sha1>.zip here. */
     fun serve(path: String): ByteArray? {
         val built = current ?: return null
-        return if (path == "/chronicler-pack/${built.sha1}.zip") built.zip else null
+        if (path == "/chronicler-pack/${built.sha1}.zip") return built.zip
+        // /print/<issue>/page-<n>.png
+        val match = Regex("/print/(\\d+)/page-(\\d+)\\.png").matchEntire(path) ?: return null
+        if (match.groupValues[1].toInt() != built.issueNumber) return null
+        return printedPages.getOrNull(match.groupValues[2].toInt() - 1)
+    }
+
+    /** Public URL of a printed page image, if the web server is reachable. */
+    fun pageUrl(page: Int = 1): String? {
+        val built = current ?: return null
+        val base = baseUrl() ?: return null
+        return "$base/print/${built.issueNumber}/page-$page.png"
     }
 
     fun offer(player: Player) {
@@ -152,6 +171,7 @@ class ResourcePackService(
             }
         }
         target.resolve("chronicler-pack.sha1").writeAtomically(built.sha1)
+        printedPages.forEachIndexed { i, png -> target.resolve("page-${i + 1}.png").writeAtomically(png) }
         return target
     }
 
@@ -167,11 +187,13 @@ class ResourcePackService(
         return built.pages
     }
 
+    private fun baseUrl(): String? = config.reader.packPublicUrl.ifBlank {
+        val ip = Bukkit.getIp()
+        if (ip.isBlank() || !config.web.enabled) null else "http://$ip:${config.web.port}"
+    }
+
     private fun packUrl(built: NewspaperPack.Built): String? {
-        val base = config.reader.packPublicUrl.ifBlank {
-            val ip = Bukkit.getIp()
-            if (ip.isBlank() || !config.web.enabled) null else "http://$ip:${config.web.port}"
-        }
+        val base = baseUrl()
         if (base == null) {
             if (!warnedNoUrl) {
                 warnedNoUrl = true

@@ -126,6 +126,14 @@ newspaper:
 editor:
   review-required: false
 
+# Letters to the editor, classified adverts and the reader poll.
+contributions:
+  enabled: true
+  # Staff approve submissions with /chronicler submissions before they print.
+  require-approval: true
+  # How many unreviewed submissions one player may have waiting.
+  max-pending-per-player: 2
+
 archive:
   # Oldest issues beyond this count are removed after publication.
   retention: 50

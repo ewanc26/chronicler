@@ -84,8 +84,9 @@ class NewspaperTypesetter(
             val g = page.createGraphics().also(::applyHints)
             val top = if (pageNumber == 1) drawFrontHead(g, newspaper, lead) else drawRunningHead(g, newspaper, pageNumber)
             queue = flow(g, queue, top, PAGE_HEIGHT - MARGIN - 20, balanceLastPage = true)
-            // A short final inside page is trimmed (in whole tiles) rather than left mostly blank.
-            val height = if (pageNumber > 1 && queue.isEmpty()) {
+            // A short final page (the front page too, for a small issue) is trimmed in
+            // whole tiles rather than left mostly blank.
+            val height = if (queue.isEmpty()) {
                 val needed = lastColumnBottom + MARGIN + 30
                 ((needed + NewspaperPack.TILE - 1) / NewspaperPack.TILE * NewspaperPack.TILE).coerceIn(NewspaperPack.TILE * 4, PAGE_HEIGHT)
             } else PAGE_HEIGHT
@@ -155,7 +156,7 @@ class NewspaperTypesetter(
             y += 6
             g.font = byline; g.color = muted
             val credit = buildString {
-                append("By ${lead.byline}")
+                append(lead.credit)
                 if (lead.players.isNotEmpty()) append(" — with ${lead.players.take(4).joinToString(", ")}")
             }
             centre(g, credit, y + 16)
@@ -199,7 +200,8 @@ class NewspaperTypesetter(
 
     // ---- Content -----------------------------------------------------------
 
-    private fun leadBody(story: Story): List<Fragment> = paragraph(story.body, dropCap = true)
+    /** A drop cap needs at least three lines to sit beside; short leads start plainly. */
+    private fun leadBody(story: Story): List<Fragment> = paragraph(story.body, dropCap = story.body.length > 160)
 
     private fun sectionFragments(section: NewspaperSection, stories: List<Story>): List<Fragment> {
         val out = mutableListOf<Fragment>()
@@ -227,18 +229,19 @@ class NewspaperTypesetter(
                 Fragment(58, keepWithNext = true) { g, x, y, w ->
                     drawPortrait(g, face, x, y + 4, 48)
                     g.font = byline; g.color = muted
-                    g.drawString("By ${story.byline}", x + 60, y + 24)
+                    g.drawString(story.credit, x + 60, y + 24)
                     g.font = byline.deriveFont(java.awt.Font.BOLD)
                     g.drawString(featured, x + 60, y + 44)
                 }
             } else {
                 Fragment(24, keepWithNext = true) { g, x, y, w ->
                     g.font = byline; g.color = muted
-                    val text = "By ${story.byline}"
+                    val text = story.credit
                     g.drawString(text, x + (w - g.fontMetrics.stringWidth(text)) / 2, y + 17)
                 }
             }
-            out += paragraph(story.body, dropCap = false)
+            val poll = story.poll
+            out += if (poll != null && poll.total > 0) pollBars(poll) else paragraph(story.body, dropCap = false, keepLast = story.players.isNotEmpty())
             if (story.players.isNotEmpty()) {
                 val names = story.players.take(6).joinToString(", ")
                 wrap("— $names", scratch.getFontMetrics(bodyItalic), COLUMN_WIDTH).forEach { line ->
@@ -290,6 +293,30 @@ class NewspaperTypesetter(
         while (dot < x + w - vw - 10) { g.fillRect(dot, y + 18, 2, 2); dot += 7 }
     }
 
+    /** Poll results as a small bar chart: label, bar in proportion to the leader, votes and share. */
+    private fun pollBars(poll: PollResult): List<Fragment> {
+        val max = poll.options.maxOf { it.votes }.coerceAtLeast(1)
+        val rows = poll.options.mapIndexed { i, option ->
+            Fragment(46, keepWithNext = true) { g, x, y, w ->
+                g.font = fonts.bold.deriveFont(17f); g.color = INK
+                g.drawString(option.label, x, y + 17)
+                val share = option.votes * 100 / poll.total
+                val figure = "${option.votes} · $share%"
+                g.font = byline; g.color = muted
+                val fw = g.fontMetrics.stringWidth(figure)
+                g.drawString(figure, x + w - fw, y + 38)
+                val barWidth = ((w - fw - 12) * option.votes / max).coerceAtLeast(2)
+                g.color = if (option.votes == max) accent else muted
+                g.fillRect(x, y + 25, barWidth, 14)
+            }
+        }
+        return rows + Fragment(26) { g, x, y, w ->
+            g.font = byline; g.color = muted
+            val text = "${poll.total} reader${if (poll.total == 1) "" else "s"} voted"
+            g.drawString(text, x + (w - g.fontMetrics.stringWidth(text)) / 2, y + 18)
+        }
+    }
+
     private fun storySeparator(): Fragment = Fragment(26, keepWithNext = true, spacer = true) { g, x, y, w ->
         g.color = INK; g.stroke = BasicStroke(1f)
         g.drawLine(x + w / 2 - 36, y + 12, x + w / 2 + 36, y + 12)
@@ -298,7 +325,7 @@ class NewspaperTypesetter(
     private fun gap(height: Int, keep: Boolean = false) = Fragment(height, keepWithNext = keep, spacer = true) { _, _, _, _ -> }
 
     /** Justified paragraph lines, optionally opening with a three-line drop cap. */
-    private fun paragraph(text: String, dropCap: Boolean): List<Fragment> {
+    private fun paragraph(text: String, dropCap: Boolean, keepLast: Boolean = false): List<Fragment> {
         val fm = scratch.getFontMetrics(body)
         val clean = text.trim().replace(Regex("\\s+"), " ")
         if (clean.isEmpty()) return emptyList()
@@ -332,7 +359,7 @@ class NewspaperTypesetter(
         }
         return lines.mapIndexed { index, (lineWords, indent) ->
             val last = index == lines.lastIndex
-            Fragment(BODY_LEADING, keepWithNext = cap != null && index < capLines - 1 || index == 0 && lines.size > 1) { g, x, y, w ->
+            Fragment(BODY_LEADING, keepWithNext = cap != null && index < capLines - 1 || index == 0 && lines.size > 1 || keepLast && index == lines.lastIndex) { g, x, y, w ->
                 g.font = body; g.color = INK
                 val baseline = y + 20
                 drawJustified(g, lineWords, x + indent, baseline, w - indent, justify = !last)

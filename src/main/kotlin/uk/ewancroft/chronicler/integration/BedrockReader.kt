@@ -4,6 +4,7 @@ import org.bukkit.entity.Player
 import org.geysermc.cumulus.form.SimpleForm
 import uk.ewancroft.chronicler.config.NewspaperConfig
 import uk.ewancroft.chronicler.news.Newspaper
+import uk.ewancroft.chronicler.news.credit
 
 /** A Bedrock form's text: kept free of Cumulus types so it can be tested without Floodgate. */
 data class BedrockPage(val title: String, val content: String, val buttons: List<String>)
@@ -28,7 +29,7 @@ object BedrockPages {
         val sections = issue.sections.filter { it.stories.isNotEmpty() }
         val section = sections[index]
         val content = section.stories.joinToString("\n\n") { story ->
-            "§l${story.headline}§r\n${story.body}\n§o§7By ${story.byline}§r"
+            "§l${story.headline}§r\n${story.body}\n§o§7${story.credit}§r"
         }
         val buttons = buildList {
             add("« Front page")
