@@ -112,7 +112,12 @@ class NewspaperPack(
                     providers += """{"type":"bitmap","file":"$NAMESPACE:$file","height":$tileGuiSize,"ascent":$ascent,"chars":["${escape(ch)}"]}"""
                     ch
                 }
-                text.append(glyph).append(BACKSPACE_ONE)
+                text.append(glyph)
+                // Cancel each glyph's 1px spacing, except after the row's last tile: the
+                // dialog re-splits text at the widest line's net width to size itself, and
+                // a row whose running width momentarily exceeds that (43px glyph, then -1)
+                // would be counted as two lines, doubling the reserved height.
+                if (c < cols - 1) text.append(BACKSPACE_ONE)
             }
             if (r < rows - 1) text.append('\n')
         }

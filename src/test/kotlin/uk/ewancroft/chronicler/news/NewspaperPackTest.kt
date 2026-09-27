@@ -84,26 +84,29 @@ class NewspaperPackTest {
             }
         }
         // Client: bitmap advance = round(width * height / textureHeight) + 1; draw top = baseline - ascent.
-        // Newlines start a new 9px line at x = 0. Rows must fit the wrap width even if
-        // negative advances are ignored when lines are measured.
+        // Newlines start a new 9px line at x = 0.
         var x = 0
         var line = 0
-        var positiveWidth = 0
         val placed = mutableListOf<Triple<String, Int, Int>>()
         val page = built.pages[0]
+        val advance = { ch: Char -> if (ch in glyphs) tileGui + 1 else spaces.getValue(ch) }
         for (ch in page.text) {
             val glyph = glyphs[ch]
             when {
-                ch == '\n' -> { x = 0; line++; positiveWidth = 0 }
-                glyph != null -> {
-                    placed += Triple(glyph.first, x, line * 9 + 7 - glyph.second)
-                    x += tileGui + 1; positiveWidth += tileGui + 1
-                }
-                else -> x += spaces.getValue(ch)
+                ch == '\n' -> { x = 0; line++ }
+                glyph != null -> { placed += Triple(glyph.first, x, line * 9 + 7 - glyph.second); x += advance(ch) }
+                else -> x += advance(ch)
             }
-            assertTrue(positiveWidth <= page.guiWidth + page.guiWidth / 16 + 8, "a row would wrap")
         }
         assertEquals(page.lines, line + 1)
+        // The dialog sizes itself by re-splitting at the widest line's net width; the running
+        // width of a row must never exceed that or the row counts as two lines.
+        val rows = page.text.split('\n')
+        val netWidth = rows.maxOf { row -> row.sumOf(advance) }
+        rows.forEach { row ->
+            var running = 0
+            row.forEach { ch -> running += advance(ch); assertTrue(running <= netWidth, "row would be re-split") }
+        }
         val original = pages[0]
         val cols = original.width / NewspaperPack.TILE
         assertEquals(original.width / NewspaperPack.TILE * (original.height / NewspaperPack.TILE), placed.size)

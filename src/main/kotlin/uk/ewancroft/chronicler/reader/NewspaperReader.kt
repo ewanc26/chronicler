@@ -140,7 +140,7 @@ class NewspaperReader(
                 .type(
                     DialogType.multiAction(buttons)
                         .columns(columns)
-                        .exitAction(ActionButton.builder(Component.text("Close")).width(100).build())
+                        .exitAction(closeButton())
                         .build()
                 )
         }
@@ -158,6 +158,17 @@ class NewspaperReader(
     }
 
     private fun wrapWidth(page: NewspaperPack.PageGlyphs) = page.guiWidth + page.guiWidth / 16 + 8
+
+    /**
+     * afterAction NONE keeps the screen up while the next page is on its way,
+     * but it also applies to the exit button, which would then do nothing
+     * without an action of its own; so Close closes the dialog explicitly.
+     */
+    private fun closeButton(): ActionButton =
+        ActionButton.builder(Component.text("Close"))
+            .width(100)
+            .action(DialogAction.customClick({ _, audience -> audience.closeDialog() }, CALLBACK_OPTIONS))
+            .build()
 
     private fun title(issue: Newspaper, where: String): Component =
         Component.text("${config.title} — No. ${issue.issueNumber} — $where")
