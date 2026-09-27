@@ -111,6 +111,7 @@ class PluginConfig(private val config: FileConfiguration) {
     val reader: ReaderConfig
     val standardSite: uk.ewancroft.chronicler.publish.StandardSiteConfig
     val discord: uk.ewancroft.chronicler.publish.DiscordConfig
+    val integrations: uk.ewancroft.chronicler.integration.IntegrationConfig
     val contributionsEnabled: Boolean
     val contributionLimits: uk.ewancroft.chronicler.contrib.ContributionLimits
     val configVersion: Int
@@ -212,6 +213,16 @@ class PluginConfig(private val config: FileConfiguration) {
             webhookUrl = config.getString("publish.discord.webhook-url", "")?.trim().orEmpty(),
             mention = config.getString("publish.discord.mention", "")?.trim().orEmpty(),
             useDiscordSrv = config.getBoolean("publish.discord.use-discordsrv", true),
+        )
+        integrations = uk.ewancroft.chronicler.integration.IntegrationConfig(
+            towny = config.getBoolean("integrations.towny", true),
+            lands = config.getBoolean("integrations.lands", true),
+            mcmmo = config.getBoolean("integrations.mcmmo", true),
+            mcmmoMilestone = config.getInt("integrations.mcmmo-milestone", 100).coerceAtLeast(1),
+            luckperms = config.getBoolean("integrations.luckperms", true),
+            quickshop = config.getBoolean("integrations.quickshop", true),
+            votifier = config.getBoolean("integrations.votifier", true),
+            plan = config.getBoolean("integrations.plan", true),
         )
         contributionsEnabled = config.getBoolean("contributions.enabled", true)
         contributionLimits = uk.ewancroft.chronicler.contrib.ContributionLimits(

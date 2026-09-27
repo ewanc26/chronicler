@@ -153,6 +153,17 @@ publish:
     # With no webhook, post a link through DiscordSRV's main channel.
     use-discordsrv: true
 
+# News from other plugins, used automatically when they are installed.
+integrations:
+  towny: true        # towns and nations founded, joined and fallen
+  lands: true        # lands, nations and wars
+  mcmmo: true        # skill milestones
+  mcmmo-milestone: 100
+  luckperms: true    # rank promotions along tracks
+  quickshop: true    # the Market Report (QuickShop-Hikari)
+  votifier: true     # server-list votes (NuVotifier)
+  plan: true         # Chronicler numbers on Plan's pages
+
 # Letters to the editor, classified adverts and the reader poll.
 contributions:
   enabled: true

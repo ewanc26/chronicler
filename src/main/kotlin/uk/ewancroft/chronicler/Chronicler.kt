@@ -31,6 +31,10 @@ import uk.ewancroft.chronicler.publish.DiscordPublisher
 import uk.ewancroft.chronicler.publish.StandardSitePublisher
 import uk.ewancroft.chronicler.integration.DiscordSrvHook
 import uk.ewancroft.chronicler.integration.MapMarkers
+import uk.ewancroft.chronicler.integration.NewsHooks
+import uk.ewancroft.chronicler.integration.PlanData
+import uk.ewancroft.chronicler.integration.PlanExtension
+import uk.ewancroft.chronicler.integration.hook
 import uk.ewancroft.chronicler.news.NewspaperGenerator
 import uk.ewancroft.chronicler.news.Portraits
 import uk.ewancroft.chronicler.news.PrintShop
@@ -96,6 +100,8 @@ class Chronicler : JavaPlugin() {
         val newsstands: Newsstands,
         val standardSite: StandardSitePublisher,
         val discord: DiscordPublisher,
+        val newsHooks: NewsHooks,
+        val planExtension: Any?,
         val contributionCommands: ContributionCommands?,
         val command: ChroniclerCommand,
     )
@@ -156,6 +162,9 @@ class Chronicler : JavaPlugin() {
         s.webRenderer?.stop()
         s.headlineTicker?.stop()
         HandlerList.unregisterAll(this)
+        s.newsHooks.close()
+        // Only touch the Plan class when Plan is present, so its absence never triggers class loading.
+        s.planExtension?.let { PlanExtension.unregister(it as PlanExtension) }
         s.sessionTracker.checkpointSessions(server.onlinePlayers)
         try {
             s.papiExpansion?.unregister()
@@ -310,6 +319,17 @@ class Chronicler : JavaPlugin() {
         }
         webRenderer?.standardSite = standardSite
 
+        val newsHooks = NewsHooks(this, eventStore, cfg.integrations, logger).also { it.register() }
+        val planExtension = if (cfg.integrations.plan) hook(this, "Plan", logger) {
+            PlanExtension.register(PlanData(
+                issuesPublished = { publicationTask.getIssueNumber().toLong() },
+                printedReaders = { packService.loadedCount().toLong() },
+                pendingSubmissions = { contributions.pending().size.toLong() },
+                storiesFeaturing = { name -> archiveStore.getAll().sumOf { issue -> issue.sections.sumOf { s -> s.stories.count { name in it.players } } }.toLong() },
+                contributionsPrinted = { uuid -> contributions.printedCount(uuid.toString()) },
+            ), logger)
+        } else null
+
         val contributionScreens = ContributionScreens(contributions, cfg.contributionLimits, cfg.newspaper.title)
         val contributionCommands = if (cfg.contributionsEnabled) ContributionCommands(
             contributions, contributionScreens, clients,
@@ -391,6 +411,8 @@ class Chronicler : JavaPlugin() {
             newsstands = newsstands,
             standardSite = standardSite,
             discord = discord,
+            newsHooks = newsHooks,
+            planExtension = planExtension,
             contributionCommands = contributionCommands,
             command = command,
         )
@@ -508,6 +530,18 @@ class Chronicler : JavaPlugin() {
             EventType.PLAYER_LEAVE -> emptyMap()
             EventType.SESSION_END -> emptyMap()
             EventType.MESSAGE_SENT -> mapOf("command" to "msg")
+            EventType.TOWN_FOUNDED -> mapOf("town" to "Oakhaven")
+            EventType.TOWN_FALLEN -> mapOf("town" to "Oakhaven", "reason" to "ruined")
+            EventType.TOWN_JOINED -> mapOf("town" to "Oakhaven")
+            EventType.NATION_FOUNDED -> mapOf("nation" to "The Northern Reach")
+            EventType.NATION_FALLEN -> mapOf("nation" to "The Northern Reach")
+            EventType.NATION_JOINED -> mapOf("town" to "Oakhaven", "nation" to "The Northern Reach")
+            EventType.WAR_DECLARED -> mapOf("attacker" to "Oakhaven", "defender" to "Stonebridge")
+            EventType.WAR_ENDED -> mapOf("winner" to "Oakhaven", "loser" to "Stonebridge")
+            EventType.SKILL_MILESTONE -> mapOf("skill" to "Mining", "level" to "500")
+            EventType.RANK_UP -> mapOf("rank" to "veteran", "track" to "default")
+            EventType.VOTE -> mapOf("service" to "ExampleList")
+            EventType.SHOP_SALE -> mapOf("item" to "iron_ingot", "amount" to "32", "total" to "64.0", "owner" to "${player}2", "direction" to "sold")
             EventType.ENTITY_TRANSFORM -> mapOf("from" to "ZOMBIE", "to" to "DROWNED", "reason" to "drown")
             EventType.SLIME_SPLIT -> mapOf("count" to "2")
             EventType.CREEPER_POWER -> mapOf("cause" to "lightning")

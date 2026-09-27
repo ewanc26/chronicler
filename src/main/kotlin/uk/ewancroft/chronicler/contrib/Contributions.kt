@@ -122,6 +122,10 @@ class Contributions(
     }
 
     @Synchronized
+    fun printedCount(authorUuid: String): Long =
+        data.submissions.count { it.authorUuid == authorUuid && it.status == SubmissionStatus.PRINTED }.toLong()
+
+    @Synchronized
     fun pending(): List<Submission> = data.submissions.filter { it.status == SubmissionStatus.PENDING }
 
     @Synchronized

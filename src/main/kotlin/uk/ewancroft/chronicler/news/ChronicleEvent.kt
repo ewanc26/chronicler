@@ -70,6 +70,19 @@ enum class EventType {
     EGG_THROW,
     HANGING_BREAK,
     HANGING_PLACE,
+    // Integrations (appended so stored events keep decoding)
+    TOWN_FOUNDED,
+    TOWN_FALLEN,
+    TOWN_JOINED,
+    NATION_FOUNDED,
+    NATION_FALLEN,
+    NATION_JOINED,
+    WAR_DECLARED,
+    WAR_ENDED,
+    SKILL_MILESTONE,
+    RANK_UP,
+    VOTE,
+    SHOP_SALE,
 }
 
 @Serializable
