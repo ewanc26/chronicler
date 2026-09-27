@@ -61,7 +61,7 @@ class WebRenderer(
             val sectionSlug = slug(section.title)
             val storiesHtml = section.stories.mapIndexed { index, story ->
                 val playersHtml = if (story.players.isNotEmpty()) {
-                    "<p class=\"players\">— ${story.players.joinToString(", ")}</p>"
+                    "<p class=\"players\">— ${escapeHtml(story.players.joinToString(", "))}</p>"
                 } else ""
 
                 """
