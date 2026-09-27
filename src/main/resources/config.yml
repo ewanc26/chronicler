@@ -169,6 +169,10 @@ web:
   port: 8080
   # Write HTML to plugin folder even when serving.
   write-files: true
+  # The address people reach this web server on, e.g. "http://play.example.com:8080".
+  # Used for the resource pack download, printed page images and links in
+  # Discord / Standard.site posts. Blank uses server-ip from server.properties.
+  public-url: ""
 
 # How players read an issue in-game.
 reader:
@@ -182,11 +186,8 @@ reader:
     # Serve Chronicler's resource pack (newspaper item art and printed pages)
     # from the web server above, and offer it to players on join.
     enabled: true
-    # Address players' clients download the pack from, e.g.
-    # "http://play.example.com:8080". Blank uses server-ip from
-    # server.properties; if that is blank too the pack is written to
-    # plugins/Chronicler/web/chronicler-pack.zip for you to host.
-    public-url: ""
+    # Downloaded from web.public-url; if that and server-ip are both blank the
+    # pack is only written to plugins/Chronicler/web/chronicler-pack.zip.
     # Kick players who decline the pack.
     required: false
     # Shown on the download prompt (MiniMessage). Blank uses the default.

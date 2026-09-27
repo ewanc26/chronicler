@@ -79,14 +79,14 @@ data class WebConfig(
     val enabled: Boolean,
     val port: Int,
     val writeFiles: Boolean,
+    /** Base URL other people and services reach the web server on, e.g. http://play.example.com:8080. */
+    val publicUrl: String = "",
 )
 
 data class ReaderConfig(
     /** "newspaper" opens the typeset page reader; "book" keeps the classic written book. */
     val mode: String,
     val packEnabled: Boolean,
-    /** Base URL clients download the pack from, e.g. http://play.example.com:8080. */
-    val packPublicUrl: String,
     val packRequired: Boolean,
     val packPrompt: String,
     /** On-screen width of a page in GUI pixels (a multiple of 8, 256-512). */
@@ -189,11 +189,11 @@ class PluginConfig(private val config: FileConfiguration) {
             enabled = config.getBoolean("web.enabled", true),
             port = config.getInt("web.port", 8080).coerceIn(1024, 65535),
             writeFiles = config.getBoolean("web.write-files", true),
+            publicUrl = (config.getString("web.public-url", "") ?: "").trim().trimEnd('/'),
         )
         reader = ReaderConfig(
             mode = (config.getString("reader.mode", "newspaper") ?: "newspaper").lowercase(),
             packEnabled = config.getBoolean("reader.resource-pack.enabled", true),
-            packPublicUrl = (config.getString("reader.resource-pack.public-url", "") ?: "").trim().trimEnd('/'),
             packRequired = config.getBoolean("reader.resource-pack.required", false),
             packPrompt = config.getString("reader.resource-pack.prompt", "") ?: "",
             pageWidth = (config.getInt("reader.page-width", 336).coerceIn(256, 512) / 8) * 8,

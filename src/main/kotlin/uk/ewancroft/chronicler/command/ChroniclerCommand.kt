@@ -37,6 +37,7 @@ class ChroniclerCommand(
             "editor" -> editor(sender, args)
             "diagnostics" -> diagnostics(sender)
             "pack" -> packCommand(sender, args)
+            "newsstand" -> newsstandCommand(sender, args)
             "write", "poll", "submissions" -> {
                 val contrib = plugin.getContributionCommands()
                 val rest = args.drop(1)
@@ -61,7 +62,7 @@ class ChroniclerCommand(
         args: Array<out String>,
     ): List<String> {
         if (args.size == 1) {
-            val cmds = listOf("read", "web", "latest", "reload", "status", "publish", "stats", "subscribe", "archive", "editor", "diagnostics", "pack", "write", "poll", "submissions", "test", "help")
+            val cmds = listOf("read", "web", "latest", "reload", "status", "publish", "stats", "subscribe", "archive", "editor", "diagnostics", "pack", "newsstand", "write", "poll", "submissions", "test", "help")
             return cmds.filter { it.startsWith(args[0], true) }
         }
         if (args[0].lowercase() == "stats" && args.size == 2) {
@@ -81,6 +82,9 @@ class ChroniclerCommand(
         }
         if (args[0].lowercase() == "submissions" && args.size == 2) {
             return listOf("approve", "reject").filter { it.startsWith(args[1], true) }
+        }
+        if (args[0].lowercase() == "newsstand" && args.size == 2) {
+            return listOf("create", "remove", "list").filter { it.startsWith(args[1], true) }
         }
         if (args[0].lowercase() == "pack" && args.size == 2) {
             return listOf("status", "export").filter { it.startsWith(args[1], true) }
@@ -144,6 +148,45 @@ class ChroniclerCommand(
         return true
     }
 
+    /** The player behind a command, including via /execute as (a proxied sender). */
+    private fun asPlayer(sender: CommandSender): Player? =
+        sender as? Player ?: (sender as? org.bukkit.command.ProxiedCommandSender)?.callee as? Player
+
+    private fun newsstandCommand(sender: CommandSender, args: Array<out String>): Boolean {
+        if (!sender.hasPermission("chronicler.admin")) return deny(sender)
+        val stands = plugin.getNewsstands() ?: return true
+        val say = { text: String -> sender.sendMessage(net.kyori.adventure.text.Component.text(text)) }
+        when (args.getOrNull(1)?.lowercase()) {
+            "create" -> {
+                val cols = args.getOrNull(2)?.toIntOrNull() ?: 2
+                val rows = args.getOrNull(3)?.toIntOrNull() ?: 3
+                // Console/command-block form: create <cols> <rows> <x> <y> <z> <facing> [world]
+                val result = if (args.size >= 8) {
+                    val (x, y, z) = listOf(args[4], args[5], args[6]).map { it.toIntOrNull() ?: return true.also { say("x y z must be whole numbers.") } }
+                    val facing = runCatching { org.bukkit.block.BlockFace.valueOf(args[7].uppercase()) }.getOrNull()
+                        ?: return true.also { say("Facing must be north, south, east or west.") }
+                    val world = (args.getOrNull(8)?.let(plugin.server::getWorld) ?: asPlayer(sender)?.world ?: plugin.server.worlds.first())
+                    stands.create(world.getBlockAt(x, y, z), facing, cols, rows)
+                } else {
+                    val player = asPlayer(sender) ?: return true.also { say("From the console: /chronicler newsstand create <cols> <rows> <x> <y> <z> <facing> [world]") }
+                    stands.create(player, cols, rows)
+                }
+                say(result ?: "Newsstand placed (${cols}x$rows). It shows each new front page; right-click it to read.")
+            }
+            "remove" -> {
+                val player = asPlayer(sender) ?: return true.also { say("Only players can remove a newsstand.") }
+                say(stands.remove(player) ?: "Newsstand removed.")
+            }
+            "list" -> {
+                val all = stands.list()
+                say(if (all.isEmpty()) "No newsstands yet. Look at an item frame and run /chronicler newsstand create [cols] [rows]."
+                    else all.joinToString("\n") { "${it.id}: ${it.cols}x${it.rows} in ${it.world}" })
+            }
+            else -> say("Usage: /chronicler newsstand create [cols] [rows] | remove | list")
+        }
+        return true
+    }
+
     private fun packCommand(sender: CommandSender, args: Array<out String>): Boolean {
         if (!sender.hasPermission("chronicler.admin")) return deny(sender)
         val packs = plugin.getPackService()
@@ -161,7 +204,7 @@ class ChroniclerCommand(
             }
             else -> sender.sendMessage(net.kyori.adventure.text.Component.text(
                 "Pack for issue #${built.issueNumber}: ${built.zip.size / 1024} KB, sha1 ${built.sha1}\n" +
-                    "URL: ${packs.publicUrl() ?: "none (set reader.resource-pack.public-url)"}\n" +
+                    "URL: ${packs.publicUrl() ?: "none (set web.public-url)"}\n" +
                     "Loaded by ${packs.loadedCount()} online player(s)."))
         }
         return true

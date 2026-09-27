@@ -13,7 +13,8 @@ import uk.ewancroft.chronicler.integration.ClientSupport
 import uk.ewancroft.chronicler.news.Newspaper
 import uk.ewancroft.chronicler.news.NewspaperPack
 import uk.ewancroft.chronicler.news.NewspaperTypesetter
-import uk.ewancroft.chronicler.news.Portraits
+import uk.ewancroft.chronicler.news.PrintShop
+import uk.ewancroft.chronicler.news.PrintedIssue
 import uk.ewancroft.chronicler.util.writeAtomically
 import java.net.URI
 import java.nio.file.Files
@@ -35,75 +36,47 @@ class ResourcePackService(
     private val webDir: Path,
     private val logger: Logger,
     private val clients: ClientSupport,
+    private val printShop: PrintShop,
 ) {
     @Volatile
     var current: NewspaperPack.Built? = null
         private set
 
-    /** The current issue's typeset pages as PNGs, for the web, Discord and cover images. */
-    @Volatile
-    var printedPages: List<ByteArray> = emptyList()
-        private set
 
     private val loaded = ConcurrentHashMap<UUID, UUID>()
 
-    private val portraits = Portraits(webDir.resolveSibling("portraits"), logger, skinUrl = { name ->
-        // Blocking Mojang profile lookup; rebuild() already runs off the server thread.
-        Bukkit.createProfile(name).takeIf { it.complete(true) }?.textures?.skin
-    })
 
-    private fun portraitsEnabled(): Boolean = when (config.newspaper.portraits) {
-        "true", "on", "yes" -> true
-        "false", "off", "no" -> false
-        else -> Bukkit.getOnlineMode()
-    }
     private val offered = ConcurrentHashMap<UUID, UUID>()
     private var warnedNoUrl = false
 
     val enabled: Boolean get() = config.reader.newspaperMode && config.reader.packEnabled
 
     /** Typesets [newspaper] and rebuilds the pack. Blocking; call from an async task. */
-    fun rebuild(newspaper: Newspaper) {
+    /** Builds and offers the pack for a freshly printed issue. Blocking; called on the printing thread. */
+    fun rebuild(printed: PrintedIssue) {
         if (!enabled) return
         try {
-            val started = System.currentTimeMillis()
-            val faces = if (portraitsEnabled()) {
-                portraits.facesFor(newspaper.sections.flatMap { s -> s.stories.flatMap { it.players } })
-            } else emptyMap()
-            val pages = NewspaperTypesetter(config.newspaper).typeset(newspaper, faces)
             val built = NewspaperPack(
                 tileGuiSize = config.reader.tileGuiSize,
                 inks = NewspaperTypesetter.inks(config.newspaper.accentColor),
-            ).build(newspaper.issueNumber, pages)
+            ).build(printed.issue.issueNumber, printed.pages)
             Files.createDirectories(webDir)
             webDir.resolve("chronicler-pack.zip").writeAtomically(built.zip)
-            printedPages = pages.map { page ->
-                java.io.ByteArrayOutputStream().also { javax.imageio.ImageIO.write(page, "png", it) }.toByteArray()
-            }
             current = built
-            logger.info("Printed issue #${newspaper.issueNumber}: ${pages.size} page(s), pack ${built.zip.size / 1024} KB in ${System.currentTimeMillis() - started}ms.")
+            logger.info("Built the newspaper pack for issue #${printed.issue.issueNumber} (${built.zip.size / 1024} KB).")
             Bukkit.getGlobalRegionScheduler().run(plugin) { _ -> Bukkit.getOnlinePlayers().forEach(::offer) }
         } catch (e: Throwable) {
-            logger.log(Level.WARNING, "Could not print issue #${newspaper.issueNumber}; readers will get the text edition.", e)
+            logger.log(Level.WARNING, "Could not build the pack for issue #${printed.issue.issueNumber}; readers will get the text edition.", e)
         }
     }
+
 
     /** The web server hands requests for /chronicler-pack/<sha1>.zip here. */
     fun serve(path: String): ByteArray? {
         val built = current ?: return null
-        if (path == "/chronicler-pack/${built.sha1}.zip") return built.zip
-        // /print/<issue>/page-<n>.png
-        val match = Regex("/print/(\\d+)/page-(\\d+)\\.png").matchEntire(path) ?: return null
-        if (match.groupValues[1].toInt() != built.issueNumber) return null
-        return printedPages.getOrNull(match.groupValues[2].toInt() - 1)
+        return if (path == "/chronicler-pack/${built.sha1}.zip") built.zip else null
     }
 
-    /** Public URL of a printed page image, if the web server is reachable. */
-    fun pageUrl(page: Int = 1): String? {
-        val built = current ?: return null
-        val base = baseUrl() ?: return null
-        return "$base/print/${built.issueNumber}/page-$page.png"
-    }
 
     fun offer(player: Player) {
         val built = current ?: return
@@ -171,7 +144,7 @@ class ResourcePackService(
             }
         }
         target.resolve("chronicler-pack.sha1").writeAtomically(built.sha1)
-        printedPages.forEachIndexed { i, png -> target.resolve("page-${i + 1}.png").writeAtomically(png) }
+        printShop.latest?.png?.forEachIndexed { i, png -> target.resolve("page-${i + 1}.png").writeAtomically(png) }
         return target
     }
 
@@ -187,17 +160,12 @@ class ResourcePackService(
         return built.pages
     }
 
-    private fun baseUrl(): String? = config.reader.packPublicUrl.ifBlank {
-        val ip = Bukkit.getIp()
-        if (ip.isBlank() || !config.web.enabled) null else "http://$ip:${config.web.port}"
-    }
-
     private fun packUrl(built: NewspaperPack.Built): String? {
-        val base = baseUrl()
+        val base = printShop.baseUrl()
         if (base == null) {
             if (!warnedNoUrl) {
                 warnedNoUrl = true
-                logger.warning("Set reader.resource-pack.public-url so players can download the newspaper pack; " +
+                logger.warning("Set web.public-url so players can download the newspaper pack; " +
                     "until then it is only written to ${webDir.resolve("chronicler-pack.zip")}.")
             }
             return null

@@ -26,7 +26,10 @@ import uk.ewancroft.chronicler.news.ArchiveStore
 import uk.ewancroft.chronicler.news.BookRenderer
 import uk.ewancroft.chronicler.news.EventStore
 import uk.ewancroft.chronicler.news.Newspaper
+import uk.ewancroft.chronicler.newsstand.Newsstands
 import uk.ewancroft.chronicler.news.NewspaperGenerator
+import uk.ewancroft.chronicler.news.Portraits
+import uk.ewancroft.chronicler.news.PrintShop
 import uk.ewancroft.chronicler.news.ChronicleEvent
 import uk.ewancroft.chronicler.news.EventType
 import uk.ewancroft.chronicler.news.WebRenderer
@@ -82,6 +85,8 @@ class Chronicler : JavaPlugin() {
         val sessionTracker: SessionTracker,
         val reader: NewspaperReader,
         val packService: ResourcePackService,
+        val printShop: PrintShop,
+        val newsstands: Newsstands,
         val contributionCommands: ContributionCommands?,
         val command: ChroniclerCommand,
     )
@@ -207,8 +212,16 @@ class Chronicler : JavaPlugin() {
         }
 
         val clients = ClientSupport(this, logger)
-        val packService = ResourcePackService(this, cfg, dataPath.resolve("web"), logger, clients)
-        webRenderer?.assetProvider = packService::serve
+        val portraits = Portraits(dataPath.resolve("portraits"), logger, skinUrl = { name ->
+            // Blocking Mojang profile lookup; printing always runs off the server thread.
+            Bukkit.createProfile(name).takeIf { it.complete(true) }?.textures?.skin
+        })
+        val printShop = PrintShop(cfg, logger, portraits, onlineMode = { Bukkit.getOnlineMode() }, baseUrlFallback = {
+            Bukkit.getIp().takeIf { it.isNotBlank() && cfg.web.enabled }?.let { "http://$it:${cfg.web.port}" }
+        })
+        val packService = ResourcePackService(this, cfg, dataPath.resolve("web"), logger, clients, printShop)
+        printShop.onPrinted(packService::rebuild)
+        webRenderer?.assetProvider = { path -> packService.serve(path) ?: printShop.serve(path) }
 
         val economyTracker = EconomyTracker(eventStore, cfg.tracking).also {
             if (it.tryHook()) logger.info("Vault economy detected.")
@@ -252,7 +265,7 @@ class Chronicler : JavaPlugin() {
                 contributions.markPrinted(issue.sections.flatMap { s -> s.stories.mapNotNull { it.sourceId } }.toSet())
             },
             onIssueReady = { issue ->
-                if (packService.enabled) Bukkit.getAsyncScheduler().runNow(this) { _ -> packService.rebuild(issue) }
+                Bukkit.getAsyncScheduler().runNow(this) { _ -> printShop.print(issue) }
             },
         ).also { it.start() }
 
@@ -261,6 +274,14 @@ class Chronicler : JavaPlugin() {
             else publicationTask.getLatestNewspaper()?.takeIf { it.issueNumber == number } ?: archiveStore.getIssue(number)
         }
         if (cfg.reader.newspaperMode) server.pluginManager.registerEvents(ReaderListener(reader, packService, cfg.newspaper, clients), this)
+
+        val newsstands = Newsstands(dataPath.resolve("newsstands.json"), logger) { player ->
+            if (!reader.open(player)) player.sendMessage(messages.noIssue())
+        }.also {
+            server.pluginManager.registerEvents(it, this)
+            it.load()
+        }
+        printShop.onPrinted(newsstands::update)
 
         val contributionScreens = ContributionScreens(contributions, cfg.contributionLimits, cfg.newspaper.title)
         val contributionCommands = if (cfg.contributionsEnabled) ContributionCommands(
@@ -339,6 +360,8 @@ class Chronicler : JavaPlugin() {
             sessionTracker = sessionTracker,
             reader = reader,
             packService = packService,
+            printShop = printShop,
+            newsstands = newsstands,
             contributionCommands = contributionCommands,
             command = command,
         )
@@ -485,6 +508,8 @@ class Chronicler : JavaPlugin() {
     fun getPackService(): ResourcePackService? = state?.packService
 
     fun getContributionCommands(): ContributionCommands? = state?.contributionCommands
+
+    fun getNewsstands(): Newsstands? = state?.newsstands
 
     fun getWebPort(): Int = state?.config?.web?.port ?: 0
 
