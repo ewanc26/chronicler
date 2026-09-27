@@ -179,6 +179,7 @@ privacy:
   # counted); sign text is kept but left out of issues. Death messages and
   # other server text are unaffected.
   include-chat-excerpts: false
+  # Also enables map markers on BlueMap / squaremap for stories with a location.
   include-coordinates: false
   excluded-players: []
 

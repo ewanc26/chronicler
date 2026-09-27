@@ -107,7 +107,12 @@ data class Story(
     val sourceId: String? = null,
     /** Results when this story reports a reader poll. */
     val poll: PollResult? = null,
+    /** Where it happened, when coordinates may be published (privacy.include-coordinates). */
+    val location: StoryLocation? = null,
 )
+
+@Serializable
+data class StoryLocation(val world: String, val x: Int, val z: Int, val y: Int? = null)
 
 /** "By Chronicler Staff" for reporting; reader contributions carry their own wording ("A letter from ..."). */
 val Story.credit: String get() = if (sourceId != null) byline else "By $byline"

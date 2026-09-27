@@ -35,6 +35,10 @@ class DeathTracker(
                     "message" to message,
                     "killer" to (killer?.name ?: "environment"),
                     "killerUuid" to (killer?.uniqueId?.toString() ?: ""),
+                    // Only printed or mapped when privacy.include-coordinates is on.
+                    "x" to player.location.blockX.toString(),
+                    "y" to player.location.blockY.toString(),
+                    "z" to player.location.blockZ.toString(),
                 ),
             )
         )

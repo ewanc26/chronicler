@@ -68,6 +68,11 @@ class NewspaperGenerator(
             sections.add(generateStatistics(events))
         }
 
+        // Give stories a place on the map from their first located event. Coordinates only
+        // survive redaction when privacy.include-coordinates is on.
+        val located = sections.map { section -> section.copy(stories = section.stories.map { story -> locate(story, events) }) }
+        sections.clear(); sections.addAll(located)
+
         val order = newspaperConfig.sectionOrder.mapIndexed { index, title -> title.lowercase() to index }.toMap()
         val structuredSections = sections.map { section ->
             section.copy(stories = section.stories.map(::structureStory).sortedByDescending(::importanceScore))
@@ -802,6 +807,15 @@ class NewspaperGenerator(
             logger.warning("LLM article generation failed for '$sectionTitle': ${e.message}; using template copy.")
             null
         }
+    }
+
+    private fun locate(story: Story, events: List<ChronicleEvent>): Story {
+        if (story.location != null || story.eventType == null || story.players.isEmpty()) return story
+        val event = events.firstOrNull { e ->
+            e.type == story.eventType && e.playerName in story.players &&
+                e.details["x"]?.toIntOrNull() != null && e.details["z"]?.toIntOrNull() != null
+        } ?: return story
+        return story.copy(location = StoryLocation(event.world, event.details["x"]!!.toInt(), event.details["z"]!!.toInt(), event.details["y"]?.toIntOrNull()))
     }
 
     private fun structureStory(story: Story): Story {

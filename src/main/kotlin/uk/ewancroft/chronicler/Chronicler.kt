@@ -30,6 +30,7 @@ import uk.ewancroft.chronicler.newsstand.Newsstands
 import uk.ewancroft.chronicler.publish.DiscordPublisher
 import uk.ewancroft.chronicler.publish.StandardSitePublisher
 import uk.ewancroft.chronicler.integration.DiscordSrvHook
+import uk.ewancroft.chronicler.integration.MapMarkers
 import uk.ewancroft.chronicler.news.NewspaperGenerator
 import uk.ewancroft.chronicler.news.Portraits
 import uk.ewancroft.chronicler.news.PrintShop
@@ -291,6 +292,11 @@ class Chronicler : JavaPlugin() {
             it.load()
         }
         printShop.onPrinted(newsstands::update)
+
+        val mapMarkers = MapMarkers(this, logger, "${cfg.newspaper.title}: latest issue")
+        if (mapMarkers.active) printShop.onPrinted { printed ->
+            mapMarkers.update(printed.issue, printShop.baseUrl()?.let { "$it/issue/${printed.issue.issueNumber}" })
+        }
 
         val standardSite = StandardSitePublisher(cfg.standardSite, cfg.newspaper, dataPath.resolve("standard-site.json"), logger, printShop::baseUrl)
         val discordSrv = server.pluginManager.getPlugin("DiscordSRV")?.takeIf { it.isEnabled }?.let(::DiscordSrvHook)
