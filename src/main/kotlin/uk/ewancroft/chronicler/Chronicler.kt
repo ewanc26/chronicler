@@ -5,6 +5,7 @@ import org.bstats.bukkit.Metrics
 import org.bukkit.Bukkit
 import org.bukkit.NamespacedKey
 import org.bukkit.command.Command
+import org.bukkit.event.HandlerList
 import org.bukkit.entity.Player
 import org.bukkit.persistence.PersistentDataType
 import org.bukkit.plugin.java.JavaPlugin
@@ -67,6 +68,7 @@ class Chronicler : JavaPlugin() {
         val headlineTicker: HeadlineTicker?,
         val papiExpansion: ChroniclerExpansion?,
         val economyTracker: EconomyTracker?,
+        val sessionTracker: SessionTracker,
         val command: ChroniclerCommand,
     )
 
@@ -88,16 +90,31 @@ class Chronicler : JavaPlugin() {
     }
 
     override fun onDisable() {
-        state?.let { s ->
-            s.publicationTask.stop()
-            s.webRenderer?.stop()
-            s.headlineTicker?.stop()
-            s.eventStore.save()
-            s.sessionStore?.save()
-            s.subscribeStore.save()
-        }
-        state = null
+        teardown()
         logger.info("Chronicler disabled.")
+    }
+
+    /**
+     * Stops everything [buildState] started and persists stores. Listeners are
+     * unregistered so a reload does not leave stale trackers writing into
+     * orphaned stores, and the web renderer is stopped so the replacement can
+     * bind the same port.
+     */
+    private fun teardown() {
+        val s = state ?: return
+        state = null
+        s.publicationTask.stop()
+        s.webRenderer?.stop()
+        s.headlineTicker?.stop()
+        HandlerList.unregisterAll(this)
+        s.sessionTracker.checkpointSessions(server.onlinePlayers)
+        try {
+            s.papiExpansion?.unregister()
+        } catch (_: NoClassDefFoundError) {
+        }
+        s.eventStore.save()
+        s.sessionStore?.save()
+        s.subscribeStore.save()
     }
 
     private fun buildState(activationTime: Long = System.currentTimeMillis()): PluginState {
@@ -141,7 +158,7 @@ class Chronicler : JavaPlugin() {
         val bookRenderer = BookRenderer(cfg.newspaper)
 
         val webRenderer = if (cfg.web.enabled) {
-            WebRenderer(cfg.web, cfg.newspaper, dataPath.resolve("web"), archiveStore)
+            WebRenderer(cfg.web, cfg.newspaper, dataPath.resolve("web"), archiveStore, logger)
         } else {
             logger.info("Web view disabled.")
             null
@@ -165,7 +182,10 @@ class Chronicler : JavaPlugin() {
             CombatTracker(eventStore, cfg.tracking),
             PlayerActionTracker(eventStore, cfg.tracking),
         )
-        trackers.add(SessionTracker(eventStore, sessionStore, cfg.tracking))
+        val sessionTracker = SessionTracker(eventStore, sessionStore, cfg.tracking).also {
+            it.resumeSessions(server.onlinePlayers)
+        }
+        trackers.add(sessionTracker)
         trackers.add(IssueRemovalListener(this))
         trackers.forEach { server.pluginManager.registerEvents(it, this) }
 
@@ -252,6 +272,7 @@ class Chronicler : JavaPlugin() {
             headlineTicker = headlineTicker,
             papiExpansion = papiExpansion,
             economyTracker = economyTracker,
+            sessionTracker = sessionTracker,
             command = command,
         )
     }
@@ -388,13 +409,7 @@ class Chronicler : JavaPlugin() {
     }
 
     fun reloadPlugin() {
-        state?.let { s ->
-            s.publicationTask.stop()
-            s.headlineTicker?.stop()
-            s.eventStore.save()
-            s.sessionStore?.save()
-            s.subscribeStore.save()
-        }
+        teardown()
         reloadConfig()
         state = buildState()
     }

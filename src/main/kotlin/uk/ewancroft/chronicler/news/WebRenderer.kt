@@ -10,16 +10,21 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.text.SimpleDateFormat
 import java.util.Date
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.logging.Level
+import java.util.logging.Logger
 
 class WebRenderer(
     private val webConfig: WebConfig,
     private val newspaperConfig: uk.ewancroft.chronicler.config.NewspaperConfig,
     private val webDir: Path,
     private val archiveStore: ArchiveStore? = null,
+    private val logger: Logger? = null,
 ) {
 
     private var server: HttpServer? = null
+    private var executor: ExecutorService? = null
     private var latestHtml: String = "<html><body><h1>No newspaper published yet.</h1></body></html>"
     private var latestRss: String = ""
     private var latestNewspaper: Newspaper? = null
@@ -314,14 +319,23 @@ class WebRenderer(
     private fun startServer() {
         try {
             val addr = InetSocketAddress(webConfig.port)
-            server = HttpServer.create(addr, 0).also { srv ->
-                srv.createContext("/", this::handleRequest)
-                srv.executor = Executors.newFixedThreadPool(
-                    Runtime.getRuntime().availableProcessors().coerceIn(2, 8),
-                )
-                srv.start()
+            val pool = Executors.newFixedThreadPool(
+                Runtime.getRuntime().availableProcessors().coerceIn(2, 8),
+            )
+            try {
+                server = HttpServer.create(addr, 0).also { srv ->
+                    srv.createContext("/", this::handleRequest)
+                    srv.executor = pool
+                    srv.start()
+                }
+                executor = pool
+                logger?.info("Web edition serving on port ${webConfig.port}.")
+            } catch (e: Exception) {
+                pool.shutdownNow()
+                throw e
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            logger?.log(Level.WARNING, "Could not start web server on port ${webConfig.port}: ${e.message}")
         }
     }
 
@@ -384,6 +398,8 @@ class WebRenderer(
     fun stop() {
         server?.stop(0)
         server = null
+        executor?.shutdownNow()
+        executor = null
     }
 
     private fun escapeHtml(text: String): String {

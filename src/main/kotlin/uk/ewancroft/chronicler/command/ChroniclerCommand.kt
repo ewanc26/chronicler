@@ -99,6 +99,10 @@ class ChroniclerCommand(
                 sender.sendMessage(mm.deserialize("<gold>Buffered events: <white>${store.allEvents().size}</white></gold>"))
                 events.forEach { event ->
                     sender.sendMessage(mm.deserialize(" <gray>${event.type.name} — <white>${event.playerName}</white> (${event.world})</gray>"))
+                    if (event.details.isNotEmpty()) {
+                        val summary = event.details.entries.joinToString(", ") { (k, v) -> "$k=${v.take(60)}" }.take(200)
+                        sender.sendMessage(net.kyori.adventure.text.Component.text("   $summary", net.kyori.adventure.text.format.NamedTextColor.DARK_GRAY))
+                    }
                 }
             }
             "preview" -> {
