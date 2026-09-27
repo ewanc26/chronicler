@@ -14,6 +14,7 @@ import uk.ewancroft.chronicler.command.ChroniclerExpansion
 import uk.ewancroft.chronicler.config.Messages
 import uk.ewancroft.chronicler.config.PluginConfig
 import uk.ewancroft.chronicler.llm.AnthropicProvider
+import uk.ewancroft.chronicler.llm.LlmHealth
 import uk.ewancroft.chronicler.llm.LlmProvider
 import uk.ewancroft.chronicler.llm.LMStudioProvider
 import uk.ewancroft.chronicler.llm.OllamaProvider
@@ -60,7 +61,7 @@ class Chronicler : JavaPlugin() {
         val subscribeStore: SubscribeStore,
         val archiveStore: ArchiveStore?,
         val llmProvider: LlmProvider?,
-        val llmAvailable: Boolean,
+        val llmHealth: LlmHealth?,
         val generator: NewspaperGenerator,
         val bookRenderer: BookRenderer,
         val webRenderer: WebRenderer?,
@@ -86,7 +87,7 @@ class Chronicler : JavaPlugin() {
         UpdateChecker(this, "ewanc26", "Chronicler", cfg.autoUpdateEnabled).checkAsync()
         state = buildState(activationTime)
         val s = state ?: return
-        logger.info("Chronicler enabled. LLM: ${if (s.llmAvailable) "${s.config.llm.provider} (${s.config.llm.model})" else "template mode"}. Web: ${if (s.config.web.enabled) "port ${s.config.web.port}" else "disabled"}.")
+        logger.info("Chronicler enabled. LLM: ${if (s.llmProvider != null) "${s.config.llm.provider} (${s.config.llm.model})" else "template mode"}. Web: ${if (s.config.web.enabled) "port ${s.config.web.port}" else "disabled"}.")
     }
 
     override fun onDisable() {
@@ -136,23 +137,27 @@ class Chronicler : JavaPlugin() {
         val subscribeStore = SubscribeStore(subscribeFile).also { it.load() }
         val archiveStore = ArchiveStore(archiveDir, cfg.archiveRetention, logger).also { it.loadAll() }
 
-        val (llmProvider, llmAvailable) = if (cfg.llm.enabled) {
-            val provider = createProvider(cfg.llm)
-            val available = provider.isAvailable()
-            if (!available) logger.warning("${provider.name()} is not reachable. Falling back to template mode.")
-            provider to available
-        } else {
-            null to false
+        val llmProvider = if (cfg.llm.enabled) createProvider(cfg.llm) else null
+        // Probing the provider is blocking network I/O, so never do it on the
+        // server thread; the generator re-checks before every issue.
+        val llmHealth = llmProvider?.let { provider ->
+            LlmHealth(provider).also { health ->
+                Bukkit.getAsyncScheduler().runNow(this) { _ ->
+                    if (health.refresh()) logger.info("${provider.name()} is reachable; articles will be written by ${cfg.llm.model}.")
+                    else logger.warning("${provider.name()} is not reachable. Using template mode until it is.")
+                }
+            }
         }
 
         val generator = NewspaperGenerator(
             store = eventStore,
             newspaperConfig = cfg.newspaper,
-            llmProvider = llmProvider?.takeIf { llmAvailable },
-            llmEnabled = cfg.llm.enabled && llmAvailable,
+            llmProvider = llmProvider,
+            llmEnabled = cfg.llm.enabled,
             logger = logger,
             llmSystemPrompt = cfg.llm.systemPrompt,
             privacyConfig = cfg.privacy,
+            llmAvailability = llmHealth?.let { health -> { health.refresh() } },
         )
 
         val bookRenderer = BookRenderer(cfg.newspaper)
@@ -264,7 +269,7 @@ class Chronicler : JavaPlugin() {
             subscribeStore = subscribeStore,
             archiveStore = archiveStore,
             llmProvider = llmProvider,
-            llmAvailable = llmAvailable,
+            llmHealth = llmHealth,
             generator = generator,
             bookRenderer = bookRenderer,
             webRenderer = webRenderer,
@@ -446,7 +451,7 @@ class Chronicler : JavaPlugin() {
             },
             issueNumber = s?.publicationTask?.getIssueNumber() ?: 0,
             eventCount = s?.eventStore?.allEvents()?.size ?: 0,
-            llmAvailable = s?.llmAvailable ?: false,
+            llmAvailable = s?.llmHealth?.available ?: false,
             webEnabled = s?.config?.web?.enabled ?: false,
             webPort = s?.config?.web?.port ?: 0,
         )

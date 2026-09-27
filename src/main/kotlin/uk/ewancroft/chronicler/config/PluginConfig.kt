@@ -54,6 +54,7 @@ data class NewspaperConfig(
     val primaryTextColor: Int = 0x1F1A14,
     val secondaryTextColor: Int = 0x3D342A,
     val mutedTextColor: Int = 0x5C4F40,
+    val serverName: String = "",
 )
 
 data class PrivacyConfig(
@@ -151,6 +152,7 @@ class PluginConfig(private val config: FileConfiguration) {
             primaryTextColor = color(config.getString("newspaper.colors.primary"), 0x1F1A14),
             secondaryTextColor = color(config.getString("newspaper.colors.secondary"), 0x3D342A),
             mutedTextColor = color(config.getString("newspaper.colors.muted"), 0x5C4F40),
+            serverName = config.getString("newspaper.server-name", "")?.trim().orEmpty(),
         )
         web = WebConfig(
             enabled = config.getBoolean("web.enabled", true),

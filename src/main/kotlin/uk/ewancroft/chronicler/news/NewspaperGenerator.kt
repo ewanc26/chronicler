@@ -14,8 +14,17 @@ class NewspaperGenerator(
     private val logger: Logger,
     private val llmSystemPrompt: String = "",
     private val privacyConfig: PrivacyConfig = PrivacyConfig(false, false, false, emptySet()),
+    /**
+     * Checked once at the start of each issue (on the async generation thread)
+     * so a provider that comes online after startup is picked up, and one that
+     * goes away falls back to template copy without a request per section.
+     */
+    private val llmAvailability: (() -> Boolean)? = null,
 ) {
     private val maxStories = newspaperConfig.storiesPerSection
+
+    @Volatile
+    private var llmActive = llmEnabled && llmProvider != null
 
     fun generate(issueNumber: Int, fromTime: Long, toTime: Long): Newspaper {
         val events = store.eventsSince(fromTime)
@@ -26,6 +35,14 @@ class NewspaperGenerator(
             .map(::redactEvent)
             .toList()
         logger.info("Generating issue #$issueNumber from ${events.size} events ($fromTime to $toTime).")
+        if (llmEnabled && llmProvider != null && llmAvailability != null) {
+            llmActive = try {
+                llmAvailability.invoke()
+            } catch (_: Exception) {
+                false
+            }
+            if (!llmActive) logger.warning("${llmProvider.name()} is not reachable; issue #$issueNumber will use template copy.")
+        }
         val sections = mutableListOf<NewspaperSection>()
 
         sections.addAll(generateHeadlines(events))
@@ -757,9 +774,11 @@ class NewspaperGenerator(
         events: List<ChronicleEvent>,
         maxStories: Int,
     ): List<Story>? {
-        if (!llmEnabled || llmProvider == null || summary.isBlank()) return null
+        if (!llmActive || llmProvider == null || summary.isBlank()) return null
 
         val systemPrompt = llmSystemPrompt
+            .replace("{series_title}", newspaperConfig.title)
+            .replace("{server_name}", newspaperConfig.serverName.ifBlank { "this server" })
             .replace("{tone}", newspaperConfig.tone)
             .replace("{maxArticleCharacters}", newspaperConfig.maxArticleCharacters.toString())
 

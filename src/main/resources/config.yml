@@ -94,6 +94,9 @@ newspaper:
   title: "The Weekly Chronicle"
   # Author name on the book.
   author: "Chronicler"
+  # Server name used for {server_name} in the LLM system prompt.
+  # Leave blank to refer to "this server".
+  server-name: ""
   # Max stories per section (only used when LLM is disabled).
   stories-per-section: 5
   # Include raw statistics page.
