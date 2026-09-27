@@ -1,103 +1,187 @@
 package uk.ewancroft.chronicler.news
 
 import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.event.ClickEvent
+import net.kyori.adventure.text.event.HoverEvent
 import net.kyori.adventure.text.format.TextColor
 import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.Material
 import org.bukkit.inventory.ItemStack
 import org.bukkit.inventory.meta.BookMeta
 import uk.ewancroft.chronicler.config.NewspaperConfig
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
+/**
+ * Lays an issue out as a written book. Book pages clip rather than scroll, so
+ * text is wrapped with the client's own glyph widths and flowed across pages
+ * that never exceed [LINES_PER_PAGE] lines of [PAGE_WIDTH] pixels.
+ */
 class BookRenderer(
     private val newspaperConfig: NewspaperConfig,
 ) {
 
     companion object {
-        private const val MAX_BODY_CHARACTERS_PER_PAGE = 650
+        /** Vanilla BookViewScreen: 114px text width, 128px text height at 9px per line. */
+        const val PAGE_WIDTH = 114
+        const val LINES_PER_PAGE = 14
+        const val MAX_PAGES = 100
 
-        internal fun splitArticle(body: String, limit: Int = MAX_BODY_CHARACTERS_PER_PAGE): List<String> {
-            if (body.length <= limit) return listOf(body)
-            val sentences = body.trim().split(Regex("(?<=[.!?])\\s+"))
-            val pages = mutableListOf<String>()
-            var current = StringBuilder()
-            for (sentence in sentences) {
-                val units = if (sentence.length > limit) sentence.split(Regex("\\s+")) else listOf(sentence)
-                for (unit in units) {
-                    if (current.isNotEmpty() && current.length + unit.length + 1 > limit) {
-                        pages.add(current.toString())
-                        current = StringBuilder()
-                    }
-                    if (current.isNotEmpty()) current.append(' ')
-                    current.append(unit)
-                }
-            }
-            if (current.isNotEmpty()) pages.add(current.toString())
-            return pages.ifEmpty { listOf(body) }
-        }
+        /** Leaves a pixel of slack so rounding differences never trigger a client-side rewrap. */
+        private const val WRAP_WIDTH = PAGE_WIDTH - 1
+
+        /** A section's first story needs its header, headline, byline and a couple of body lines. */
+        private const val MIN_LINES_FOR_STORY_START = 5
     }
+
+    /** One laid-out line; [plain] is kept for measuring and tests. */
+    internal data class Line(val component: Component, val plain: String, val bold: Boolean = false)
+
+    private val accent = TextColor.color(newspaperConfig.accentColor)
+    private val primaryText = TextColor.color(newspaperConfig.primaryTextColor)
+    private val secondaryText = TextColor.color(newspaperConfig.secondaryTextColor)
+    private val mutedText = TextColor.color(newspaperConfig.mutedTextColor)
 
     fun renderToBook(newspaper: Newspaper): ItemStack {
         val book = ItemStack(Material.WRITTEN_BOOK)
         val meta = book.itemMeta as BookMeta
 
-        meta.setTitle("${newspaperConfig.title} #${newspaper.issueNumber}")
+        meta.setTitle("${newspaperConfig.title} #${newspaper.issueNumber}".take(32))
         meta.setAuthor(newspaperConfig.author)
         meta.setGeneration(BookMeta.Generation.ORIGINAL)
-
-        val pages = renderPages(newspaper)
-        meta.addPages(*pages.toTypedArray())
+        meta.addPages(*layout(newspaper).map(::pageComponent).toTypedArray())
 
         book.itemMeta = meta
         return book
     }
 
-    private fun renderPages(newspaper: Newspaper): List<Component> {
-        val accent = TextColor.color(newspaperConfig.accentColor)
-        val primaryText = TextColor.color(newspaperConfig.primaryTextColor)
-        val secondaryText = TextColor.color(newspaperConfig.secondaryTextColor)
-        val mutedText = TextColor.color(newspaperConfig.mutedTextColor)
-        val pages = mutableListOf<Component>()
-
-        val titlePage = Component.text()
-            .append(Component.text("${newspaperConfig.title}\n", accent))
-            .append(Component.text("Issue #${newspaper.issueNumber}\n", secondaryText))
-            .append(Component.newline())
-            .append(Component.text(newspaperConfig.titlePageText, mutedText))
-            .build()
-        pages.add(titlePage)
-
-        for (section in newspaper.sections) {
-            for (story in section.stories) {
-                val parts = splitArticle(story.body)
-                parts.forEachIndexed { index, part ->
-                    val page = Component.text()
-                    page.append(Component.text("${section.title.uppercase()}\n", accent, TextDecoration.BOLD))
-                    page.append(Component.text("${"=".repeat(Math.min(section.title.length, 20))}\n\n", mutedText))
-                    val headline = if (index == 0) story.headline else "${story.headline} (cont.)"
-                    page.append(Component.text("$headline\n", primaryText, TextDecoration.BOLD))
-                    if (index == 0) {
-                        page.append(Component.text("By ${story.byline}\n", mutedText, TextDecoration.ITALIC))
-                        page.append(Component.newline())
-                    }
-                    page.append(Component.text("$part\n", secondaryText))
-                    if (index == parts.lastIndex && story.players.isNotEmpty()) {
-                        page.append(Component.text("Filed under: ${story.players.joinToString(", ")}\n", mutedText))
-                    }
-                    if (index < parts.lastIndex) page.append(Component.text("\nContinued on next page…", mutedText, TextDecoration.ITALIC))
-                    pages.add(page.build())
-                }
-            }
+    internal fun layout(newspaper: Newspaper): List<List<Line>> {
+        // Sections are laid out first so the cover can list their page numbers.
+        val body = mutableListOf<List<Line>>()
+        val sectionStarts = mutableListOf<Pair<String, Int>>()
+        for (section in newspaper.sections.filter { it.stories.isNotEmpty() }) {
+            val pages = layoutSection(section)
+            sectionStarts += section.title to body.size
+            body += pages
         }
 
-        val now = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm").format(java.util.Date())
-        val footer = Component.text()
-            .append(Component.newline())
-            .append(Component.text("— End of Issue —\n", mutedText))
-            .append(Component.text("Published: $now", mutedText))
-            .build()
-        pages.add(footer)
+        val cover = layoutCover(newspaper, sectionStarts)
+        val contentsOffset = cover.size + 1 // page numbers are 1-based
+        val coverWithLinks = cover.map { page ->
+            page.map { line -> line.withPageOffset(contentsOffset) }
+        }
 
+        val pages = coverWithLinks + body + listOf(footerPage(newspaper))
+        if (pages.size <= MAX_PAGES) return pages
+        return pages.take(MAX_PAGES - 1) + listOf(listOf(
+            text("— Issue truncated —", mutedText, italic = true),
+            text("This issue is longer than a book allows. Read it in full on the web edition.", mutedText),
+        ).flatten())
+    }
+
+    private fun layoutCover(newspaper: Newspaper, sectionStarts: List<Pair<String, Int>>): List<List<Line>> {
+        val lines = mutableListOf<Line>()
+        lines += text(newspaperConfig.title, accent, bold = true)
+        lines += rule()
+        lines += text("No. ${newspaper.issueNumber} · ${dateLine(newspaper.toTime)}", secondaryText)
+        lines += blank()
+        lines += text(newspaperConfig.titlePageText, mutedText, italic = true)
+        if (sectionStarts.isNotEmpty()) {
+            lines += blank()
+            lines += text("IN THIS ISSUE", accent, bold = true)
+            sectionStarts.forEach { (title, index) -> lines += contentsEntry(title, index) }
+        }
+        return lines.chunked(LINES_PER_PAGE)
+    }
+
+    private fun layoutSection(section: NewspaperSection): List<List<Line>> {
+        val pages = mutableListOf<List<Line>>()
+        var page = mutableListOf<Line>()
+        val header = text(section.title.uppercase(), accent, bold = true) + rule()
+
+        fun newPage(continued: Boolean) {
+            if (page.isNotEmpty()) pages += page
+            page = mutableListOf()
+            if (continued) page += text("${section.title.uppercase()} (cont.)", mutedText, italic = true)
+        }
+
+        page += header
+        section.stories.forEachIndexed { index, story ->
+            val storyLines = mutableListOf<Line>()
+            if (index > 0) storyLines += blank()
+            storyLines += text(story.headline, primaryText, bold = true)
+            storyLines += text("By ${story.byline}", mutedText, italic = true)
+            storyLines += text(story.body, secondaryText)
+            if (story.players.isNotEmpty()) storyLines += text("Filed under: ${story.players.joinToString(", ")}", mutedText)
+
+            // Avoid stranding a headline at the foot of a page.
+            val remaining = LINES_PER_PAGE - page.size
+            if (remaining < minOf(MIN_LINES_FOR_STORY_START, storyLines.size)) newPage(continued = true)
+
+            for (line in storyLines) {
+                if (page.size == LINES_PER_PAGE) newPage(continued = true)
+                // Never open a continuation page with a spacer line.
+                if (line.plain.isEmpty() && page.size <= 1 && pages.isNotEmpty()) continue
+                page += line
+            }
+        }
+        if (page.isNotEmpty()) pages += page
         return pages
     }
 
+    private fun footerPage(newspaper: Newspaper): List<Line> = buildList {
+        addAll(text("— End of Issue —", mutedText))
+        addAll(blank())
+        addAll(text("${newspaperConfig.title}, No. ${newspaper.issueNumber}", secondaryText))
+        addAll(text("Published ${dateLine(newspaper.toTime)}", mutedText))
+    }
+
+    private fun contentsEntry(title: String, bodyIndex: Int): Line {
+        val label = MinecraftFont.wrap(title, WRAP_WIDTH - 24).first()
+        // Page numbers are resolved once the cover length is known; see withPageOffset.
+        return Line(
+            Component.text("• $label", secondaryText)
+                .insertion("$bodyIndex"),
+            "• $label",
+        )
+    }
+
+    private fun Line.withPageOffset(offset: Int): Line {
+        val index = component.insertion()?.toIntOrNull() ?: return this
+        val pageNumber = index + offset
+        val fixed = MinecraftFont.width("$plain  $pageNumber")
+        val leader = ".".repeat(((WRAP_WIDTH - fixed) / MinecraftFont.advance('.')).coerceAtLeast(0))
+        return Line(
+            Component.text()
+                .append(Component.text(plain, secondaryText))
+                .append(Component.text(" $leader ", mutedText))
+                .append(Component.text("$pageNumber", accent))
+                .clickEvent(ClickEvent.changePage(pageNumber))
+                .hoverEvent(HoverEvent.showText(Component.text("Go to page $pageNumber")))
+                .build(),
+            "$plain $leader $pageNumber",
+        )
+    }
+
+    private fun text(content: String, color: TextColor, bold: Boolean = false, italic: Boolean = false): List<Line> =
+        MinecraftFont.wrap(content, WRAP_WIDTH, bold).map { line ->
+            var component = Component.text(line, color)
+            if (bold) component = component.decorate(TextDecoration.BOLD)
+            if (italic) component = component.decorate(TextDecoration.ITALIC)
+            Line(component, line, bold)
+        }
+
+    private fun rule(): List<Line> {
+        val count = WRAP_WIDTH / MinecraftFont.advance('=')
+        return listOf(Line(Component.text("=".repeat(count), mutedText), "=".repeat(count)))
+    }
+
+    private fun blank(): List<Line> = listOf(Line(Component.empty(), ""))
+
+    private fun pageComponent(lines: List<Line>): Component =
+        Component.join(net.kyori.adventure.text.JoinConfiguration.newlines(), lines.map { it.component })
+
+    private fun dateLine(time: Long): String =
+        SimpleDateFormat("EEE d MMM yyyy", Locale.UK).format(Date(time))
 }
