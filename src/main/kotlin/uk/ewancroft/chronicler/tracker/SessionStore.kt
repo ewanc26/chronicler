@@ -5,6 +5,9 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.logging.Logger
+import uk.ewancroft.chronicler.util.quarantineCorrupt
+import uk.ewancroft.chronicler.util.writeAtomically
 
 @Serializable
 data class SessionData(
@@ -18,7 +21,10 @@ data class SessionData(
     var lastSeen: Long = 0,
 )
 
-class SessionStore(private val dataPath: Path) {
+class SessionStore(
+    private val dataPath: Path,
+    private val logger: Logger? = null,
+) {
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -45,9 +51,8 @@ class SessionStore(private val dataPath: Path) {
 
     fun save() {
         synchronized(sessions) {
-            Files.createDirectories(dataPath.parent)
             val map = sessions.mapValues { (_, v) -> v }
-            dataPath.toFile().writeText(json.encodeToString(map))
+            dataPath.writeAtomically(json.encodeToString(map))
         }
     }
 
@@ -60,7 +65,8 @@ class SessionStore(private val dataPath: Path) {
                     sessions.clear()
                     sessions.putAll(loaded)
                 }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                dataPath.quarantineCorrupt(logger, e)
             }
         }
     }

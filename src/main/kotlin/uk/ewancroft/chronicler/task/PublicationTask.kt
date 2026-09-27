@@ -16,6 +16,7 @@ import uk.ewancroft.chronicler.news.Newspaper
 import uk.ewancroft.chronicler.news.NewspaperGenerator
 import uk.ewancroft.chronicler.news.WebRenderer
 import uk.ewancroft.chronicler.tracker.SubscribeStore
+import uk.ewancroft.chronicler.util.writeAtomically
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.Calendar
@@ -332,8 +333,7 @@ class PublicationTask(
 
     private fun saveState() {
         try {
-            Files.createDirectories(stateFile.parent)
-            Files.writeString(stateFile, "$issueNumber\n$lastPublishTime\n$lastPublishGameTime")
+            stateFile.writeAtomically("$issueNumber\n$lastPublishTime\n$lastPublishGameTime")
         } catch (e: Exception) {
             logger.log(Level.SEVERE, "Failed to save publication state to $stateFile.", e)
         }

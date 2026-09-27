@@ -128,13 +128,13 @@ class Chronicler : JavaPlugin() {
 
         val messages = Messages(File(dataFolder, "messages.yml")).also { it.load() }
 
-        val eventStore = EventStore(storeFile).also {
+        val eventStore = EventStore(storeFile, logger).also {
             it.setMaxEvents(cfg.eventLimit)
             it.load()
         }
 
-        val sessionStore = SessionStore(sessionFile).also { it.load() }
-        val subscribeStore = SubscribeStore(subscribeFile).also { it.load() }
+        val sessionStore = SessionStore(sessionFile, logger).also { it.load() }
+        val subscribeStore = SubscribeStore(subscribeFile, logger).also { it.load() }
         val archiveStore = ArchiveStore(archiveDir, cfg.archiveRetention, logger).also { it.loadAll() }
 
         val llmProvider = if (cfg.llm.enabled) createProvider(cfg.llm) else null
