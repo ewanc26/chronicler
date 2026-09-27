@@ -150,6 +150,21 @@ class BookRendererTest {
     }
 
     @Test
+    fun `newspaper items carry their issue number and legacy copies are recognised`() {
+        val book = BookRenderer(config).renderToBook(sampleIssue(bodyLength = 60))
+        assertEquals(3, BookRenderer.issueNumberOf(book))
+
+        val legacy = org.bukkit.inventory.ItemStack(Material.WRITTEN_BOOK)
+        legacy.itemMeta = (legacy.itemMeta as BookMeta).apply { setTitle("Test Chronicle #7"); setAuthor("Tester") }
+        assertEquals(7, BookRenderer.issueNumberOf(legacy, config))
+        assertEquals(null, BookRenderer.issueNumberOf(legacy))
+
+        val stranger = org.bukkit.inventory.ItemStack(Material.WRITTEN_BOOK)
+        stranger.itemMeta = (stranger.itemMeta as BookMeta).apply { setTitle("Test Chronicle #7"); setAuthor("Someone") }
+        assertEquals(null, BookRenderer.issueNumberOf(stranger, config))
+    }
+
+    @Test
     fun `wrap splits words wider than a line`() {
         val lines = MinecraftFont.wrap("x".repeat(60), BookRenderer.PAGE_WIDTH)
         assertTrue(lines.size > 1)

@@ -25,7 +25,7 @@ class ChroniclerCommand(
         }
 
         return when (args[0].lowercase()) {
-            "read" -> readIssue(sender)
+            "read" -> readIssue(sender, args)
             "web" -> webUrl(sender)
             "latest" -> readLatest(sender)
             "reload" -> reloadConfig(sender)
@@ -120,7 +120,20 @@ class ChroniclerCommand(
         return true
     }
 
-    private fun readIssue(sender: CommandSender): Boolean {
+    private fun readIssue(sender: CommandSender, args: Array<out String>): Boolean {
+        // Staff (and the console) can hand a player the paper: /chronicler read <player>
+        val targetName = args.getOrNull(1)
+        if (targetName != null) {
+            if (!sender.hasPermission("chronicler.admin")) return deny(sender)
+            val target = plugin.server.getPlayerExact(targetName)
+            if (target == null) {
+                sender.sendMessage(net.kyori.adventure.text.Component.text("$targetName is not online."))
+                return true
+            }
+            plugin.giveNewspaper(target)
+            sender.sendMessage(net.kyori.adventure.text.Component.text("Opened the latest issue for ${target.name}."))
+            return true
+        }
         if (sender !is Player) {
             sender.sendMessage(messages.playerOnly())
             return true

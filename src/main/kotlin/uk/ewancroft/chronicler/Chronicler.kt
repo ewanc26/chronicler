@@ -225,7 +225,7 @@ class Chronicler : JavaPlugin() {
             if (number == null) publicationTask.getLatestNewspaper()
             else publicationTask.getLatestNewspaper()?.takeIf { it.issueNumber == number } ?: archiveStore.getIssue(number)
         }
-        if (cfg.reader.newspaperMode) server.pluginManager.registerEvents(ReaderListener(reader, packService), this)
+        if (cfg.reader.newspaperMode) server.pluginManager.registerEvents(ReaderListener(reader, packService, cfg.newspaper), this)
 
         server.pluginManager.registerEvents(object : org.bukkit.event.Listener {
             @org.bukkit.event.EventHandler

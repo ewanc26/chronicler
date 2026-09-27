@@ -15,6 +15,7 @@ import net.kyori.adventure.text.format.TextColor
 import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.entity.Player
 import uk.ewancroft.chronicler.config.NewspaperConfig
+import uk.ewancroft.chronicler.news.MinecraftFont
 import uk.ewancroft.chronicler.news.Newspaper
 import uk.ewancroft.chronicler.news.NewspaperPack
 import java.text.SimpleDateFormat
@@ -33,8 +34,9 @@ class NewspaperReader(
     private val findIssue: (Int?) -> Newspaper?,
 ) {
 
-    private val accent = TextColor.color(config.accentColor)
-    private val muted = TextColor.color(config.mutedTextColor)
+    // Dialogs sit on a dark backdrop, so the newsprint accent is lifted towards white to stay legible.
+    private val accent = TextColor.lerp(0.55f, TextColor.color(config.accentColor), NamedTextColor.WHITE)
+    private val muted = NamedTextColor.GRAY
 
     /** Opens [issueNumber] (or the latest issue) at its front page. Returns false if there is none. */
     fun open(player: Player, issueNumber: Int? = null): Boolean {
@@ -141,8 +143,10 @@ class NewspaperReader(
         }
 
     private fun button(label: String, enabled: Boolean, tooltip: String? = null, onClick: (Player) -> Unit): ActionButton {
+        // Wide enough for "Crafting & Enchanting" and similar section names (dialog buttons max out at 1024).
+        val width = (MinecraftFont.width(label) + 16).coerceIn(110, 200)
         val builder = ActionButton.builder(Component.text(label, if (enabled) NamedTextColor.WHITE else NamedTextColor.DARK_GRAY))
-            .width(110)
+            .width(width)
         tooltip?.let { builder.tooltip(Component.text(it)) }
         if (enabled) {
             builder.action(DialogAction.customClick({ _, audience -> (audience as? Player)?.let(onClick) }, CALLBACK_OPTIONS))

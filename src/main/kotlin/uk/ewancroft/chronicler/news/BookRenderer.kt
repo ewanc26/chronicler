@@ -38,8 +38,19 @@ class BookRenderer(
         /** Identifies which issue a newspaper item holds. */
         val ISSUE_KEY = NamespacedKey("chronicler", "issue_number")
 
-        fun issueNumberOf(item: ItemStack?): Int? =
-            item?.takeIf { it.type == Material.WRITTEN_BOOK }?.itemMeta?.persistentDataContainer?.get(ISSUE_KEY, PersistentDataType.INTEGER)
+        /**
+         * The issue a newspaper item holds. Papers printed before items were
+         * tagged are recognised by the "<title> #<n>" title and author they
+         * were always given, so old copies in chests open in the reader too.
+         */
+        fun issueNumberOf(item: ItemStack?, config: NewspaperConfig? = null): Int? {
+            val meta = item?.takeIf { it.type == Material.WRITTEN_BOOK }?.itemMeta as? BookMeta ?: return null
+            meta.persistentDataContainer.get(ISSUE_KEY, PersistentDataType.INTEGER)?.let { return it }
+            if (config == null || meta.author != config.author) return null
+            val title = meta.title ?: return null
+            val prefix = "${config.title} #".take(31)
+            return if (title.startsWith(prefix)) title.removePrefix(prefix).toIntOrNull() else null
+        }
 
         /** A section's first story needs its header, headline, byline and a couple of body lines. */
         private const val MIN_LINES_FOR_STORY_START = 5
