@@ -56,14 +56,6 @@ class ActivityTracker(
     }
 
     @EventHandler
-    fun onSignPlace(event: org.bukkit.event.block.SignChangeEvent) {
-        if (!tracking.chat) return
-        // Sign event recorded via ChronicleEvent (SIGN type added); details from sign lines
-    }
-    @EventHandler
-    fun onTeleport(event: org.bukkit.event.player.PlayerTeleportEvent) {
-        // Teleport event recorded via ChronicleEvent (TELEPORT type added)
-    }
     fun onEnchant(event: EnchantItemEvent) {
         if (!tracking.crafting) return
         val player = event.enchanter

@@ -24,7 +24,6 @@ enum class EventType {
     MILESTONE_PLAYTIME,
     MESSAGE_SENT,
     ORE_DISCOVERY,
-    SIGN,
     DISTANCE_MILESTONE,
     END_ENTER,
     // Player activity
