@@ -80,14 +80,21 @@ bstats-enabled: true
 # LLM article generation (set enabled: false for template-only mode)
 llm:
   enabled: true
-  provider: ollama    # ollama, openai, anthropic
+  provider: ollama    # ollama, openai, anthropic, lmstudio, cocore
   model: llama3.2
   api-key: ""
   base-url: https://openrouter.ai/api/v1
   ollama-url: http://localhost:11434
   timeout-seconds: 30
+  # {series_title} comes from newspaper.title; {server_name} from newspaper.server-name
   system-prompt: "You are the editor of \"{series_title}\"..."
+
+newspaper:
+  title: "The Weekly Chronicle"
+  server-name: ""     # blank = "this server"
 ```
+
+The LLM is probed asynchronously at startup and again before each issue, so a model server started after Minecraft is picked up automatically; while it is unreachable, issues use template copy.
 
 ## Commands
 
@@ -108,7 +115,7 @@ llm:
 | `/chronicler editor remove <section> <story>` | `chronicler.admin` | Remove a draft story |
 | `/chronicler editor publish` | `chronicler.admin` | Approve and publish the draft |
 | `/chronicler diagnostics` | `chronicler.admin` | Show subsystem and updater health |
-| `/chronicler reload` | `chronicler.admin` | Reload configuration |
+| `/chronicler reload` | `chronicler.admin` | Reload configuration and restart all subsystems |
 | `/chronicler publish` | `chronicler.admin` | Force-publish a new issue now |
 
 Alias: `/clr`
