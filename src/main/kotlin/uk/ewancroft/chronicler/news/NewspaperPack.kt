@@ -105,19 +105,24 @@ class NewspaperPack(
         var nextCodePoint = TILE_BASE
 
         for (r in 0 until rows) {
-            // Identical tiles in a row (blank paper, mostly) share one glyph.
-            val rowGlyphs = mutableMapOf<Int, Char>()
+            // Identical tiles in a row (blank paper, mostly) share one glyph. Bucketed by a
+            // hash first, but a hash match alone is not proof of identical pixels (a 32-bit
+            // hash over 16384 pixels of real content can collide), so each bucket also keeps
+            // the actual pixels to compare against before reusing a glyph.
+            val rowGlyphs = mutableMapOf<Int, MutableList<Pair<IntArray, Char>>>()
             for (c in 0 until cols) {
                 val tile = page.getSubimage(c * TILE, r * TILE, TILE, TILE)
                 val pixels = tile.getRGB(0, 0, TILE, TILE, null, 0, TILE)
                 val key = pixels.contentHashCode()
-                val glyph = rowGlyphs.getOrPut(key) {
+                val bucket = rowGlyphs.getOrPut(key) { mutableListOf() }
+                val glyph = bucket.firstOrNull { (existing, _) -> existing.contentEquals(pixels) }?.second ?: run {
                     val ch = nextCodePoint++.toChar()
                     val file = "font/$fontName/r${r}c$c.png"
                     files["assets/$NAMESPACE/textures/$file"] = indexedPng(tile)
                     // Row r is on text line r (already r * 9px down); drop it the rest of the way.
                     val ascent = 7 - r * (tileGuiSize - LINE_HEIGHT)
                     providers += """{"type":"bitmap","file":"$NAMESPACE:$file","height":$tileGuiSize,"ascent":$ascent,"chars":["${escape(ch)}"]}"""
+                    bucket += pixels to ch
                     ch
                 }
                 text.append(glyph)

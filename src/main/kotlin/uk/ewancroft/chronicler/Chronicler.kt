@@ -286,7 +286,13 @@ class Chronicler : JavaPlugin() {
             onIssueReady = { issue ->
                 Bukkit.getAsyncScheduler().runNow(this) { _ -> printShop.print(issue) }
             },
-        ).also { it.start() }
+            onStoryWithdrawn = { sourceId -> contributions.withdraw(sourceId) },
+        )
+        // start() is deferred: it synchronously restores the archived issue and
+        // fires an async print, which would race the printShop.onPrinted(...)
+        // registrations further down (newsstands, map markers, publishers) if
+        // that print landed before they were added. It is called once every
+        // consumer is registered, below.
 
         val reader = NewspaperReader(cfg.newspaper, packService, clients, bookRenderer::renderToBook) { number ->
             if (number == null) publicationTask.getLatestNewspaper()
@@ -337,6 +343,11 @@ class Chronicler : JavaPlugin() {
             contributions, contributionScreens, clients,
             clients.floodgate?.let { BedrockContributions(it, contributions, contributionScreens) },
         ) else null
+
+        // Every printShop.onPrinted(...) consumer (pack, newsstands, map markers,
+        // Standard.site/Discord) is registered above; starting now means the
+        // synchronous restore-and-print on enable/reload reaches all of them.
+        publicationTask.start()
 
         server.pluginManager.registerEvents(object : org.bukkit.event.Listener {
             @org.bukkit.event.EventHandler
@@ -426,12 +437,13 @@ class Chronicler : JavaPlugin() {
         toRemove.forEach { player.inventory.remove(it) }
     }
 
-    fun giveNewspaper(player: Player) {
-        val s = state ?: return
+    /** Opens/hands the latest issue to [player]. Returns false (with a message to [player]) if none exists or their inventory is full. */
+    fun giveNewspaper(player: Player): Boolean {
+        val s = state ?: return false
         val book = s.publicationTask.getLatestBook()
         if (book == null) {
             player.sendMessage(s.messages.noIssue())
-            return
+            return false
         }
         // Tag the book so we can detect when it's opened
         val meta = book.itemMeta
@@ -443,10 +455,11 @@ class Chronicler : JavaPlugin() {
         if (s.config.reader.newspaperMode) s.reader.open(player)
         if (player.inventory.firstEmpty() == -1) {
             player.sendMessage(s.messages.inventoryFull())
-            return
+            return false
         }
         player.inventory.addItem(book)
         player.sendMessage(s.messages.delivering())
+        return true
     }
 
     fun publishNow(): Boolean = state?.publicationTask?.publishNow() ?: false

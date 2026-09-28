@@ -111,8 +111,11 @@ class StandardSitePublisher(
 
             val cover = printed.pages.firstOrNull()?.let { client.uploadBlob(session, jpeg(it), "image/jpeg") }
             val existing = current.documents[issue.issueNumber]
-            val post = if (config.announce && existing?.postUri == null) announce(session, issue, base, cover) else
-                existing?.postUri?.let { AtprotoClient.StrongRef(it, existing.postCid!!) }
+            // postUri/postCid are independent nullable fields on a persisted record, so a
+            // hand-edited or partially-written state file could carry one without the other;
+            // treat that as "no post recorded" rather than crashing the whole publish on !!.
+            val existingPost = existing?.postUri?.let { uri -> existing.postCid?.let { cid -> AtprotoClient.StrongRef(uri, cid) } }
+            val post = if (config.announce && existingPost == null) announce(session, issue, base, cover) else existingPost
             val rkey = existing?.rkey ?: Tid.next()
             val document = client.putRecord(session, "site.standard.document", rkey,
                 documentRecord(issue, publication.uri, cover, post))
