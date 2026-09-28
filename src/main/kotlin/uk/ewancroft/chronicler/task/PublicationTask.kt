@@ -43,6 +43,8 @@ class PublicationTask(
     private val onIssueReady: (Newspaper) -> Unit = {},
     /** Called (on the server thread) only when a new issue has actually been published. */
     private val onPublished: (Newspaper) -> Unit = {},
+    /** Called (on the server thread) with a story's sourceId when it is removed from the draft. */
+    private val onStoryWithdrawn: (String) -> Unit = {},
 ) {
 
     private var issueNumber = 0
@@ -143,11 +145,15 @@ class PublicationTask(
     fun removeDraftStory(sectionIndex: Int, storyIndex: Int): Boolean {
         val draft = draftNewspaper ?: return false
         val section = draft.sections.getOrNull(sectionIndex) ?: return false
-        if (storyIndex !in section.stories.indices) return false
+        val removed = section.stories.getOrNull(storyIndex) ?: return false
         val sections = draft.sections.toMutableList()
         sections[sectionIndex] = section.copy(stories = section.stories.filterIndexed { index, _ -> index != storyIndex })
         draftNewspaper = draft.copy(sections = sections.filter { it.stories.isNotEmpty() })
         saveDraft()
+        // Otherwise a reader letter or poll pulled into this draft, then
+        // explicitly removed, would still be APPROVED/open and reappear
+        // unattended in the next issue.
+        removed.sourceId?.let(onStoryWithdrawn)
         return true
     }
 

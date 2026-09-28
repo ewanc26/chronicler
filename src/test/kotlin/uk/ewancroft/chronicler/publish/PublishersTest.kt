@@ -126,6 +126,26 @@ class PublishersTest {
     }
 
     @Test
+    fun `a partial postUri-without-postCid state does not abort the whole publish`() {
+        // Simulates a hand-edited or partially-written state file: postUri present, postCid
+        // missing. This must not crash publish() via a bare !! before the document is written.
+        val stateFile = dir.resolve("standard-site.json")
+        stateFile.toFile().writeText("""
+            {"did":"did:plc:abc123","publicationRkey":"pub1","publicationUri":"at://did:plc:abc123/site.standard.publication/pub1",
+             "documents":{"7":{"rkey":"doc1","uri":"at://did:plc:abc123/site.standard.document/doc1","postUri":"at://did:plc:abc123/app.bsky.feed.post/old","postCid":null}}}
+        """.trimIndent())
+        val p = StandardSitePublisher(
+            StandardSiteConfig(enabled = true, identifier = "news.example.com", appPassword = "app-pass", announce = true),
+            newspaper, stateFile, Logger.getAnonymousLogger(), { "https://news.example.com" },
+            AtprotoClient(publicApi = base, plcDirectory = base),
+        )
+        p.publish(printed)
+        assertTrue(records.any { it["collection"]!!.jsonPrimitive.content == "site.standard.document" },
+            "the document must still be (re)published instead of the whole publish silently aborting")
+        assertNotNull(p.documentUri(7))
+    }
+
+    @Test
     fun `tids are 13 sortable characters`() {
         val a = Tid.next(); val b = Tid.next()
         assertEquals(13, a.length)

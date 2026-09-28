@@ -160,7 +160,7 @@ class Newsstands(
         val scale = minOf(width.toDouble() / page.width, height.toDouble() / page.height)
         val w = (page.width * scale).toInt()
         val h = (page.height * scale).toInt()
-        g.drawImage(page, (width - w) / 2, 0, w, h, null)
+        g.drawImage(page, (width - w) / 2, (height - h) / 2, w, h, null)
         g.dispose()
         stand.maps.forEachIndexed { i, id ->
             val tile = canvas.getSubimage((i % stand.cols) * 128, (i / stand.cols) * 128, 128, 128)
