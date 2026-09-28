@@ -382,7 +382,13 @@ class WebRenderer(
             else -> latestHtml
         }.let { page ->
             // Standard.site document verification: <link rel="site.standard.document" href="at://...">
-            val number = if (path.startsWith("/issue/")) path.removePrefix("/issue/").toIntOrNull() else latestNewspaper?.issueNumber
+            // Only the pages that actually represent one issue (root = latest, /issue/<n>) may
+            // carry this; /archive and /search are index pages, not that issue's document.
+            val number = when {
+                path.startsWith("/issue/") -> path.removePrefix("/issue/").toIntOrNull()
+                path == "/" || path.isEmpty() -> latestNewspaper?.issueNumber
+                else -> null
+            }
             val uri = number?.let { standardSite?.documentUri(it) }
             if (uri == null) page else page.replaceFirst("</head>", "<link rel=\"site.standard.document\" href=\"${escapeHtml(uri)}\">\n</head>")
         }

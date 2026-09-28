@@ -121,6 +121,35 @@ class Contributions(
         return Result.Accepted(submission)
     }
 
+    /**
+     * Reverts a story's contribution to non-printing state when an editor
+     * removes it from a draft, so it does not silently reappear (already
+     * APPROVED, hence eligible again) in a later issue with no further
+     * editor action. Unlike [moderate], which only acts on PENDING items,
+     * this acts on the APPROVED/poll-open state a draft pulls from.
+     */
+    @Synchronized
+    fun withdraw(sourceId: String): Boolean = when {
+        sourceId.startsWith("submission:") -> {
+            val id = sourceId.removePrefix("submission:")
+            val target = data.submissions.firstOrNull { it.id == id && it.status == SubmissionStatus.APPROVED }
+            if (target == null) false else {
+                data = data.copy(submissions = data.submissions.map { if (it.id == id) it.copy(status = SubmissionStatus.REJECTED) else it })
+                save()
+                true
+            }
+        }
+        sourceId.startsWith("poll:") -> {
+            val poll = data.poll
+            if (poll == null || "poll:${poll.id}" != sourceId) false else {
+                data = data.copy(poll = null)
+                save()
+                true
+            }
+        }
+        else -> false
+    }
+
     @Synchronized
     fun printedCount(authorUuid: String): Long =
         data.submissions.count { it.authorUuid == authorUuid && it.status == SubmissionStatus.PRINTED }.toLong()

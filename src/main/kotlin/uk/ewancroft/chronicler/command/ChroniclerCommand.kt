@@ -232,8 +232,14 @@ class ChroniclerCommand(
                 sender.sendMessage(net.kyori.adventure.text.Component.text("$targetName is not online."))
                 return true
             }
-            plugin.giveNewspaper(target)
-            sender.sendMessage(net.kyori.adventure.text.Component.text("Opened the latest issue for ${target.name}."))
+            val delivered = plugin.giveNewspaper(target)
+            if (delivered || sender == target) {
+                // The target already saw why, above, if it failed; only tell an admin
+                // acting on someone else's behalf when it actually succeeded.
+                if (delivered) sender.sendMessage(net.kyori.adventure.text.Component.text("Opened the latest issue for ${target.name}."))
+            } else {
+                sender.sendMessage(net.kyori.adventure.text.Component.text("Could not deliver the paper to ${target.name}: no issue yet, or their inventory is full."))
+            }
             return true
         }
         if (sender !is Player) {

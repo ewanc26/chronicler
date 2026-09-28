@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Path
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -60,5 +61,38 @@ class ContributionsTest {
         assertEquals(listOf(0, 2), story.poll!!.options.map { it.votes })
         c.markPrinted(setOf(story.sourceId!!))
         assertNull(c.poll())
+    }
+
+    @Test
+    fun `withdrawing a submission pulled from the draft keeps it out of future issues`() {
+        val c = store()
+        val sub = assertIs<Contributions.Result.Accepted>(c.submit(SubmissionKind.LETTER, "Alex", "u1", "Fix the bridge", "It has a hole.")).submission
+        c.moderate(sub.id, approve = true)
+        val sourceId = c.sectionsForPrint().single().stories.single().sourceId!!
+
+        assertTrue(c.withdraw(sourceId), "an editor pulling an approved story out of the draft")
+        assertTrue(c.sectionsForPrint().isEmpty(), "withdrawn letters must not reappear unattended in a later issue")
+        // A second withdrawal of the same, already-withdrawn story is a no-op, not an error.
+        assertFalse(c.withdraw(sourceId))
+    }
+
+    @Test
+    fun `withdrawing the poll cancels it without printing partial results`() {
+        val c = store()
+        c.createPoll("Best biome?", listOf("Forest", "Desert"))
+        c.vote("u1", 0)
+        val sourceId = c.sectionsForPrint().single { it.title == "Reader Poll" }.stories.single().sourceId!!
+
+        assertTrue(c.withdraw(sourceId))
+        assertNull(c.poll())
+        assertTrue(c.sectionsForPrint().isEmpty())
+    }
+
+    @Test
+    fun `withdraw ignores unknown or already-printed sourceIds`() {
+        val c = store()
+        assertFalse(c.withdraw("submission:doesnotexist"))
+        assertFalse(c.withdraw("poll:doesnotexist"))
+        assertFalse(c.withdraw("not-a-recognised-prefix"))
     }
 }

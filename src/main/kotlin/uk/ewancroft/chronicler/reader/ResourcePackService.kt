@@ -139,8 +139,7 @@ class ResourcePackService(
                 val entry = zip.nextEntry ?: break
                 val out = folder.resolve(entry.name).normalize()
                 require(out.startsWith(folder)) { "unsafe entry ${entry.name}" }
-                Files.createDirectories(out.parent)
-                Files.write(out, zip.readBytes())
+                out.writeAtomically(zip.readBytes())
             }
         }
         target.resolve("chronicler-pack.sha1").writeAtomically(built.sha1)
