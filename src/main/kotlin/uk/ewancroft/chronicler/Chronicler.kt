@@ -5,6 +5,9 @@ import org.bstats.bukkit.Metrics
 import org.bukkit.Bukkit
 import org.bukkit.NamespacedKey
 import org.bukkit.command.Command
+import org.bukkit.event.HandlerList
+import org.bukkit.permissions.Permission
+import org.bukkit.permissions.PermissionDefault
 import org.bukkit.entity.Player
 import org.bukkit.persistence.PersistentDataType
 import org.bukkit.plugin.java.JavaPlugin
@@ -13,6 +16,7 @@ import uk.ewancroft.chronicler.command.ChroniclerExpansion
 import uk.ewancroft.chronicler.config.Messages
 import uk.ewancroft.chronicler.config.PluginConfig
 import uk.ewancroft.chronicler.llm.AnthropicProvider
+import uk.ewancroft.chronicler.llm.LlmHealth
 import uk.ewancroft.chronicler.llm.LlmProvider
 import uk.ewancroft.chronicler.llm.LMStudioProvider
 import uk.ewancroft.chronicler.llm.OllamaProvider
@@ -22,10 +26,29 @@ import uk.ewancroft.chronicler.news.ArchiveStore
 import uk.ewancroft.chronicler.news.BookRenderer
 import uk.ewancroft.chronicler.news.EventStore
 import uk.ewancroft.chronicler.news.Newspaper
+import uk.ewancroft.chronicler.newsstand.Newsstands
+import uk.ewancroft.chronicler.publish.DiscordPublisher
+import uk.ewancroft.chronicler.publish.StandardSitePublisher
+import uk.ewancroft.chronicler.integration.DiscordSrvHook
+import uk.ewancroft.chronicler.integration.MapMarkers
+import uk.ewancroft.chronicler.integration.NewsHooks
+import uk.ewancroft.chronicler.integration.PlanData
+import uk.ewancroft.chronicler.integration.PlanExtension
+import uk.ewancroft.chronicler.integration.hook
 import uk.ewancroft.chronicler.news.NewspaperGenerator
+import uk.ewancroft.chronicler.news.Portraits
+import uk.ewancroft.chronicler.news.PrintShop
 import uk.ewancroft.chronicler.news.ChronicleEvent
 import uk.ewancroft.chronicler.news.EventType
 import uk.ewancroft.chronicler.news.WebRenderer
+import uk.ewancroft.chronicler.contrib.ContributionCommands
+import uk.ewancroft.chronicler.contrib.ContributionScreens
+import uk.ewancroft.chronicler.contrib.Contributions
+import uk.ewancroft.chronicler.integration.BedrockContributions
+import uk.ewancroft.chronicler.integration.ClientSupport
+import uk.ewancroft.chronicler.reader.NewspaperReader
+import uk.ewancroft.chronicler.reader.ReaderListener
+import uk.ewancroft.chronicler.reader.ResourcePackService
 import uk.ewancroft.chronicler.task.HeadlineTicker
 import uk.ewancroft.chronicler.task.PublicationTask
 import uk.ewancroft.chronicler.tracker.ActivityTracker
@@ -51,6 +74,9 @@ class Chronicler : JavaPlugin() {
 
     private var state: PluginState? = null
 
+    /** Issue numbers published this session whose printing should be announced. */
+    private val announceQueue = java.util.concurrent.ConcurrentHashMap.newKeySet<Int>()
+
     data class PluginState(
         val config: PluginConfig,
         val messages: Messages,
@@ -59,7 +85,7 @@ class Chronicler : JavaPlugin() {
         val subscribeStore: SubscribeStore,
         val archiveStore: ArchiveStore?,
         val llmProvider: LlmProvider?,
-        val llmAvailable: Boolean,
+        val llmHealth: LlmHealth?,
         val generator: NewspaperGenerator,
         val bookRenderer: BookRenderer,
         val webRenderer: WebRenderer?,
@@ -67,16 +93,29 @@ class Chronicler : JavaPlugin() {
         val headlineTicker: HeadlineTicker?,
         val papiExpansion: ChroniclerExpansion?,
         val economyTracker: EconomyTracker?,
+        val sessionTracker: SessionTracker,
+        val reader: NewspaperReader,
+        val packService: ResourcePackService,
+        val printShop: PrintShop,
+        val newsstands: Newsstands,
+        val standardSite: StandardSitePublisher,
+        val discord: DiscordPublisher,
+        val newsHooks: NewsHooks,
+        val planExtension: Any?,
+        val contributionCommands: ContributionCommands?,
         val command: ChroniclerCommand,
     )
 
     override fun onEnable() {
         val activationTime = System.currentTimeMillis()
+        // The newspaper typesetter uses Java2D; never let it touch a display.
+        if (System.getProperty("java.awt.headless") == null) System.setProperty("java.awt.headless", "true")
         saveDefaultConfig()
         val messagesFile = File(dataFolder, "messages.yml")
         if (!messagesFile.exists()) {
             saveResource("messages.yml", false)
         }
+        registerPermissions()
         val cfg = PluginConfig(config)
         if (cfg.bStatsEnabled) {
             Metrics(this, 23467)
@@ -84,20 +123,56 @@ class Chronicler : JavaPlugin() {
         UpdateChecker(this, "ewanc26", "Chronicler", cfg.autoUpdateEnabled).checkAsync()
         state = buildState(activationTime)
         val s = state ?: return
-        logger.info("Chronicler enabled. LLM: ${if (s.llmAvailable) "${s.config.llm.provider} (${s.config.llm.model})" else "template mode"}. Web: ${if (s.config.web.enabled) "port ${s.config.web.port}" else "disabled"}.")
+        logger.info("Chronicler enabled. LLM: ${if (s.llmProvider != null) "${s.config.llm.provider} (${s.config.llm.model})" else "template mode"}. Web: ${if (s.config.web.enabled) "port ${s.config.web.port}" else "disabled"}.")
+    }
+
+    /**
+     * Paper ignores plugin.yml (including its permissions section) when
+     * paper-plugin.yml is present, and unregistered permissions are op-only,
+     * so without this ordinary players could not use /chronicler at all.
+     */
+    private fun registerPermissions() {
+        val defaults = listOf(
+            Triple("chronicler.use", "Read the newspaper.", PermissionDefault.TRUE),
+            Triple("chronicler.write", "Send letters to the editor and classified adverts.", PermissionDefault.TRUE),
+            Triple("chronicler.admin", "Admin commands for Chronicler.", PermissionDefault.OP),
+        )
+        for ((name, description, default) in defaults) {
+            if (server.pluginManager.getPermission(name) == null) {
+                server.pluginManager.addPermission(Permission(name, description, default))
+            }
+        }
     }
 
     override fun onDisable() {
-        state?.let { s ->
-            s.publicationTask.stop()
-            s.webRenderer?.stop()
-            s.headlineTicker?.stop()
-            s.eventStore.save()
-            s.sessionStore?.save()
-            s.subscribeStore.save()
-        }
-        state = null
+        teardown()
         logger.info("Chronicler disabled.")
+    }
+
+    /**
+     * Stops everything [buildState] started and persists stores. Listeners are
+     * unregistered so a reload does not leave stale trackers writing into
+     * orphaned stores, and the web renderer is stopped so the replacement can
+     * bind the same port.
+     */
+    private fun teardown() {
+        val s = state ?: return
+        state = null
+        s.publicationTask.stop()
+        s.webRenderer?.stop()
+        s.headlineTicker?.stop()
+        HandlerList.unregisterAll(this)
+        s.newsHooks.close()
+        // Only touch the Plan class when Plan is present, so its absence never triggers class loading.
+        s.planExtension?.let { PlanExtension.unregister(it as PlanExtension) }
+        s.sessionTracker.checkpointSessions(server.onlinePlayers)
+        try {
+            s.papiExpansion?.unregister()
+        } catch (_: NoClassDefFoundError) {
+        }
+        s.eventStore.save()
+        s.sessionStore?.save()
+        s.subscribeStore.save()
     }
 
     private fun buildState(activationTime: Long = System.currentTimeMillis()): PluginState {
@@ -110,42 +185,61 @@ class Chronicler : JavaPlugin() {
 
         val messages = Messages(File(dataFolder, "messages.yml")).also { it.load() }
 
-        val eventStore = EventStore(storeFile).also {
+        val eventStore = EventStore(storeFile, logger).also {
             it.setMaxEvents(cfg.eventLimit)
             it.load()
         }
 
-        val sessionStore = SessionStore(sessionFile).also { it.load() }
-        val subscribeStore = SubscribeStore(subscribeFile).also { it.load() }
+        val sessionStore = SessionStore(sessionFile, logger).also { it.load() }
+        val subscribeStore = SubscribeStore(subscribeFile, logger).also { it.load() }
         val archiveStore = ArchiveStore(archiveDir, cfg.archiveRetention, logger).also { it.loadAll() }
 
-        val (llmProvider, llmAvailable) = if (cfg.llm.enabled) {
-            val provider = createProvider(cfg.llm)
-            val available = provider.isAvailable()
-            if (!available) logger.warning("${provider.name()} is not reachable. Falling back to template mode.")
-            provider to available
-        } else {
-            null to false
+        val llmProvider = if (cfg.llm.enabled) createProvider(cfg.llm) else null
+        // Probing the provider is blocking network I/O, so never do it on the
+        // server thread; the generator re-checks before every issue.
+        val llmHealth = llmProvider?.let { provider ->
+            LlmHealth(provider).also { health ->
+                Bukkit.getAsyncScheduler().runNow(this) { _ ->
+                    if (health.refresh()) logger.info("${provider.name()} is reachable; articles will be written by ${cfg.llm.model}.")
+                    else logger.warning("${provider.name()} is not reachable. Using template mode until it is.")
+                }
+            }
         }
+
+        val contributions = Contributions(dataPath.resolve("contributions.json"), cfg.contributionLimits, logger).also { it.load() }
 
         val generator = NewspaperGenerator(
             store = eventStore,
             newspaperConfig = cfg.newspaper,
-            llmProvider = llmProvider?.takeIf { llmAvailable },
-            llmEnabled = cfg.llm.enabled && llmAvailable,
+            llmProvider = llmProvider,
+            llmEnabled = cfg.llm.enabled,
             logger = logger,
             llmSystemPrompt = cfg.llm.systemPrompt,
             privacyConfig = cfg.privacy,
+            llmAvailability = llmHealth?.let { health -> { health.refresh() } },
+            contributions = { if (cfg.contributionsEnabled) contributions.sectionsForPrint() else emptyList() },
         )
 
         val bookRenderer = BookRenderer(cfg.newspaper)
 
         val webRenderer = if (cfg.web.enabled) {
-            WebRenderer(cfg.web, cfg.newspaper, dataPath.resolve("web"), archiveStore)
+            WebRenderer(cfg.web, cfg.newspaper, dataPath.resolve("web"), archiveStore, logger)
         } else {
             logger.info("Web view disabled.")
             null
         }
+
+        val clients = ClientSupport(this, logger)
+        val portraits = Portraits(dataPath.resolve("portraits"), logger, skinUrl = { name ->
+            // Blocking Mojang profile lookup; printing always runs off the server thread.
+            Bukkit.createProfile(name).takeIf { it.complete(true) }?.textures?.skin
+        })
+        val printShop = PrintShop(cfg, logger, portraits, onlineMode = { Bukkit.getOnlineMode() }, baseUrlFallback = {
+            Bukkit.getIp().takeIf { it.isNotBlank() && cfg.web.enabled }?.let { "http://$it:${cfg.web.port}" }
+        })
+        val packService = ResourcePackService(this, cfg, dataPath.resolve("web"), logger, clients, printShop)
+        printShop.onPrinted(packService::rebuild)
+        webRenderer?.assetProvider = { path -> packService.serve(path) ?: printShop.serve(path) }
 
         val economyTracker = EconomyTracker(eventStore, cfg.tracking).also {
             if (it.tryHook()) logger.info("Vault economy detected.")
@@ -159,13 +253,16 @@ class Chronicler : JavaPlugin() {
             PrivateMessageTracker(eventStore, cfg.tracking),
             BreakingNewsTracker(eventStore, cfg),
             economyTracker,
-            ActivityTracker(eventStore, cfg.tracking),
+            ActivityTracker(eventStore, cfg.tracking, storeChatText = cfg.privacy.includeChatExcerpts),
             WorldTracker(eventStore, cfg.tracking),
             EntityTracker(eventStore, cfg.tracking),
             CombatTracker(eventStore, cfg.tracking),
             PlayerActionTracker(eventStore, cfg.tracking),
         )
-        trackers.add(SessionTracker(eventStore, sessionStore, cfg.tracking))
+        val sessionTracker = SessionTracker(eventStore, sessionStore, cfg.tracking).also {
+            it.resumeSessions(server.onlinePlayers)
+        }
+        trackers.add(sessionTracker)
         trackers.add(IssueRemovalListener(this))
         trackers.forEach { server.pluginManager.registerEvents(it, this) }
 
@@ -182,7 +279,64 @@ class Chronicler : JavaPlugin() {
             logger = logger,
             activationTime = activationTime,
             logsDir = dataFolder.parentFile?.parentFile?.toPath()?.resolve("logs"),
+            onPublished = { issue ->
+                announceQueue += issue.issueNumber
+                contributions.markPrinted(issue.sections.flatMap { s -> s.stories.mapNotNull { it.sourceId } }.toSet())
+            },
+            onIssueReady = { issue ->
+                Bukkit.getAsyncScheduler().runNow(this) { _ -> printShop.print(issue) }
+            },
         ).also { it.start() }
+
+        val reader = NewspaperReader(cfg.newspaper, packService, clients, bookRenderer::renderToBook) { number ->
+            if (number == null) publicationTask.getLatestNewspaper()
+            else publicationTask.getLatestNewspaper()?.takeIf { it.issueNumber == number } ?: archiveStore.getIssue(number)
+        }
+        if (cfg.reader.newspaperMode) server.pluginManager.registerEvents(ReaderListener(reader, packService, cfg.newspaper, clients), this)
+
+        val newsstands = Newsstands(dataPath.resolve("newsstands.json"), logger) { player ->
+            if (!reader.open(player)) player.sendMessage(messages.noIssue())
+        }.also {
+            server.pluginManager.registerEvents(it, this)
+            it.load()
+        }
+        printShop.onPrinted(newsstands::update)
+
+        val mapMarkers = MapMarkers(this, logger, "${cfg.newspaper.title}: latest issue")
+        if (mapMarkers.active) printShop.onPrinted { printed ->
+            mapMarkers.update(printed.issue, printShop.baseUrl()?.let { "$it/issue/${printed.issue.issueNumber}" })
+        }
+
+        val standardSite = StandardSitePublisher(cfg.standardSite, cfg.newspaper, dataPath.resolve("standard-site.json"), logger, printShop::baseUrl)
+        val discordSrv = server.pluginManager.getPlugin("DiscordSRV")?.takeIf { it.isEnabled }?.let(::DiscordSrvHook)
+        val discord = DiscordPublisher(cfg.discord, cfg.newspaper, logger, printShop::baseUrl, discordSrv?.let { hook -> hook::send })
+        // Only issues published while running are announced; restoring on start just re-prints.
+        printShop.onPrinted { printed ->
+            if (announceQueue.remove(printed.issue.issueNumber)) {
+                standardSite.publish(printed)
+                discord.publish(printed)
+            }
+        }
+        webRenderer?.standardSite = standardSite
+
+        val newsHooks = NewsHooks(this, eventStore, cfg.integrations, logger).also { it.register() }
+        // Typed Any: a PlanExtension-typed result would be cast (and the class loaded) even
+        // when Plan is absent, failing with NoClassDefFoundError for DataExtension.
+        val planExtension: Any? = if (cfg.integrations.plan) hook<Any?>(this, "Plan", logger) {
+            PlanExtension.register(PlanData(
+                issuesPublished = { publicationTask.getIssueNumber().toLong() },
+                printedReaders = { packService.loadedCount().toLong() },
+                pendingSubmissions = { contributions.pending().size.toLong() },
+                storiesFeaturing = { name -> archiveStore.getAll().sumOf { issue -> issue.sections.sumOf { s -> s.stories.count { name in it.players } } }.toLong() },
+                contributionsPrinted = { uuid -> contributions.printedCount(uuid.toString()) },
+            ), logger)
+        } else null
+
+        val contributionScreens = ContributionScreens(contributions, cfg.contributionLimits, cfg.newspaper.title)
+        val contributionCommands = if (cfg.contributionsEnabled) ContributionCommands(
+            contributions, contributionScreens, clients,
+            clients.floodgate?.let { BedrockContributions(it, contributions, contributionScreens) },
+        ) else null
 
         server.pluginManager.registerEvents(object : org.bukkit.event.Listener {
             @org.bukkit.event.EventHandler
@@ -244,7 +398,7 @@ class Chronicler : JavaPlugin() {
             subscribeStore = subscribeStore,
             archiveStore = archiveStore,
             llmProvider = llmProvider,
-            llmAvailable = llmAvailable,
+            llmHealth = llmHealth,
             generator = generator,
             bookRenderer = bookRenderer,
             webRenderer = webRenderer,
@@ -252,6 +406,16 @@ class Chronicler : JavaPlugin() {
             headlineTicker = headlineTicker,
             papiExpansion = papiExpansion,
             economyTracker = economyTracker,
+            sessionTracker = sessionTracker,
+            reader = reader,
+            packService = packService,
+            printShop = printShop,
+            newsstands = newsstands,
+            standardSite = standardSite,
+            discord = discord,
+            newsHooks = newsHooks,
+            planExtension = planExtension,
+            contributionCommands = contributionCommands,
             command = command,
         )
     }
@@ -276,6 +440,7 @@ class Chronicler : JavaPlugin() {
             meta.persistentDataContainer.set(key, PersistentDataType.INTEGER, 1)
             book.itemMeta = meta
         }
+        if (s.config.reader.newspaperMode) s.reader.open(player)
         if (player.inventory.firstEmpty() == -1) {
             player.sendMessage(s.messages.inventoryFull())
             return
@@ -367,6 +532,18 @@ class Chronicler : JavaPlugin() {
             EventType.PLAYER_LEAVE -> emptyMap()
             EventType.SESSION_END -> emptyMap()
             EventType.MESSAGE_SENT -> mapOf("command" to "msg")
+            EventType.TOWN_FOUNDED -> mapOf("town" to "Oakhaven")
+            EventType.TOWN_FALLEN -> mapOf("town" to "Oakhaven", "reason" to "ruined")
+            EventType.TOWN_JOINED -> mapOf("town" to "Oakhaven")
+            EventType.NATION_FOUNDED -> mapOf("nation" to "The Northern Reach")
+            EventType.NATION_FALLEN -> mapOf("nation" to "The Northern Reach")
+            EventType.NATION_JOINED -> mapOf("town" to "Oakhaven", "nation" to "The Northern Reach")
+            EventType.WAR_DECLARED -> mapOf("attacker" to "Oakhaven", "defender" to "Stonebridge")
+            EventType.WAR_ENDED -> mapOf("winner" to "Oakhaven", "loser" to "Stonebridge")
+            EventType.SKILL_MILESTONE -> mapOf("skill" to "Mining", "level" to "500")
+            EventType.RANK_UP -> mapOf("rank" to "veteran", "track" to "default")
+            EventType.VOTE -> mapOf("service" to "ExampleList")
+            EventType.SHOP_SALE -> mapOf("item" to "iron_ingot", "amount" to "32", "total" to "64.0", "owner" to "${player}2", "direction" to "sold")
             EventType.ENTITY_TRANSFORM -> mapOf("from" to "ZOMBIE", "to" to "DROWNED", "reason" to "drown")
             EventType.SLIME_SPLIT -> mapOf("count" to "2")
             EventType.CREEPER_POWER -> mapOf("cause" to "lightning")
@@ -388,15 +565,26 @@ class Chronicler : JavaPlugin() {
     }
 
     fun reloadPlugin() {
-        state?.let { s ->
-            s.publicationTask.stop()
-            s.headlineTicker?.stop()
-            s.eventStore.save()
-            s.sessionStore?.save()
-            s.subscribeStore.save()
-        }
+        teardown()
         reloadConfig()
         state = buildState()
+    }
+
+    fun getPackService(): ResourcePackService? = state?.packService
+
+    fun getContributionCommands(): ContributionCommands? = state?.contributionCommands
+
+    fun getNewsstands(): Newsstands? = state?.newsstands
+
+    /** Re-sends the current issue to Standard.site and/or Discord (off the server thread). */
+    fun announceAgain(targets: Set<String>): Boolean {
+        val s = state ?: return false
+        val printed = s.printShop.latest ?: return false
+        Bukkit.getAsyncScheduler().runNow(this) { _ ->
+            if ("standard-site" in targets) s.standardSite.publish(printed)
+            if ("discord" in targets) s.discord.publish(printed)
+        }
+        return true
     }
 
     fun getWebPort(): Int = state?.config?.web?.port ?: 0
@@ -431,7 +619,7 @@ class Chronicler : JavaPlugin() {
             },
             issueNumber = s?.publicationTask?.getIssueNumber() ?: 0,
             eventCount = s?.eventStore?.allEvents()?.size ?: 0,
-            llmAvailable = s?.llmAvailable ?: false,
+            llmAvailable = s?.llmHealth?.available ?: false,
             webEnabled = s?.config?.web?.enabled ?: false,
             webPort = s?.config?.web?.port ?: 0,
         )

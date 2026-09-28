@@ -38,16 +38,13 @@ class LMStudioProvider(private val config: LlmConfig) : LlmProvider {
 
     override fun generate(systemPrompt: String, sectionTitle: String, eventSummary: String): ArticleResult? {
         val prompt = buildPrompt(sectionTitle, eventSummary)
-        val resolvedSystemPrompt = systemPrompt
-            .replace("{series_title}", "The Weekly Chronicle")
-            .replace("{server_name}", "this server")
 
         val requestBody = buildJsonObject {
             put("model", JsonPrimitive(config.model))
             putJsonArray("messages") {
                 add(buildJsonObject {
                     put("role", JsonPrimitive("system"))
-                    put("content", JsonPrimitive(resolvedSystemPrompt))
+                    put("content", JsonPrimitive(systemPrompt))
                 })
                 add(buildJsonObject {
                     put("role", JsonPrimitive("user"))
@@ -80,16 +77,21 @@ class LMStudioProvider(private val config: LlmConfig) : LlmProvider {
         } catch (_: Exception) {
             null
         } finally {
-            scheduleUnload()
+            unloadModel()
         }
     }
 
-    private fun scheduleUnload() {
+    private fun unloadModel() {
         try {
-            val dataDir = System.getProperty("chronicler.dataDir") ?: "/data/plugins/Chronicler"
-            val triggerFile = java.io.File(dataDir, "unload-lms.trigger")
-            triggerFile.parentFile.mkdirs()
-            triggerFile.writeText(System.currentTimeMillis().toString())
+            val request = HttpRequest.newBuilder()
+                .uri(URI.create("${config.lmStudioUrl}/api/v1/models/unload"))
+                .header("Content-Type", "application/json")
+                .timeout(Duration.ofSeconds(5))
+                .POST(HttpRequest.BodyPublishers.ofString(
+                    buildJsonObject { put("instance_id", JsonPrimitive(config.model)) }.toString()
+                ))
+                .build()
+            client.send(request, HttpResponse.BodyHandlers.discarding())
         } catch (_: Exception) { }
     }
 }

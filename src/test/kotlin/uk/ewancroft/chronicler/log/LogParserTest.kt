@@ -107,12 +107,34 @@ class LogParserTest {
         writeLog(tempDir.resolve("latest.log"), listOf(
             "[12:00:00] [Server thread/INFO]: <Steve> Hello world!",
         ))
-        val parser = LogParser(tempDir, tracking, logger)
+        val parser = LogParser(tempDir, tracking, logger, storeChatText = true)
         val events = parser.parse()
         assertEquals(1, events.size)
         assertEquals(EventType.CHAT, events[0].type)
         assertEquals("Steve", events[0].playerName)
         assertEquals("Hello world!", events[0].details["message"])
+    }
+
+    @Test
+    fun `chat text is not stored unless excerpts are enabled`() {
+        writeLog(tempDir.resolve("latest.log"), listOf(
+            "[12:00:00] [Server thread/INFO]: <Steve> my secret base is at 100 64 200",
+        ))
+        val events = LogParser(tempDir, tracking, logger).parse()
+        assertEquals(1, events.size)
+        assertEquals(EventType.CHAT, events[0].type)
+        assertTrue(events[0].details.isEmpty())
+    }
+
+    @Test
+    fun `parses unsigned chat logged as Not Secure`() {
+        writeLog(tempDir.resolve("latest.log"), listOf(
+            "[12:00:00] [Async Chat Thread - #0/INFO]: [Not Secure] <Scribe> Hello from offline mode",
+        ))
+        val events = LogParser(tempDir, tracking, logger, storeChatText = true).parse()
+        assertEquals(1, events.size)
+        assertEquals("Scribe", events[0].playerName)
+        assertEquals("Hello from offline mode", events[0].details["message"])
     }
 
     @Test

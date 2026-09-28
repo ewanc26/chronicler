@@ -256,6 +256,21 @@ class NewspaperGeneratorTest {
     }
 
     @Test
+    fun `llm resolves series title and server name from config`() {
+        store.record(event(EventType.DEATH, details = mapOf("message" to "ewanc26 fell")))
+        val fake = FakeLlmProvider()
+        val cfg = config.copy(serverName = "Croft SMP")
+        NewspaperGenerator(store, cfg, fake, true, logger, "Editor of {series_title} on {server_name}.")
+            .generate(1, 0L, System.currentTimeMillis())
+        assertEquals("Editor of Test Chronicle on Croft SMP.", fake.capturedSystemPrompts.first())
+
+        val fallback = FakeLlmProvider()
+        NewspaperGenerator(store, config, fallback, true, logger, "{server_name}")
+            .generate(1, 0L, System.currentTimeMillis())
+        assertEquals("this server", fallback.capturedSystemPrompts.first())
+    }
+
+    @Test
     fun `llm system prompt passes through without variables when none used`() {
         store.record(event(EventType.DEATH, details = mapOf("message" to "fell")))
         val fake = FakeLlmProvider()
@@ -263,6 +278,45 @@ class NewspaperGeneratorTest {
         gen.generate(1, 0L, System.currentTimeMillis())
 
         assertEquals("Static prompt text.", fake.capturedSystemPrompts.first())
+    }
+
+    @Test
+    fun `unreachable llm uses template copy without per-section requests`() {
+        store.record(event(EventType.DEATH, details = mapOf("message" to "ewanc26 fell")))
+        val fake = FakeLlmProvider(headline = "LLM Headline")
+        val gen = NewspaperGenerator(store, config, fake, true, logger, "", llmAvailability = { false })
+        val newspaper = gen.generate(1, 0L, System.currentTimeMillis())
+
+        assertTrue(fake.capturedSectionTitles.isEmpty())
+        assertTrue(newspaper.sections.flatMap { it.stories }.none { it.headline == "LLM Headline" })
+    }
+
+    @Test
+    fun `llm availability is rechecked for each issue`() {
+        store.record(event(EventType.DEATH, details = mapOf("message" to "ewanc26 fell")))
+        val fake = FakeLlmProvider(headline = "LLM Headline")
+        var online = false
+        val gen = NewspaperGenerator(store, config, fake, true, logger, "", llmAvailability = { online })
+
+        gen.generate(1, 0L, System.currentTimeMillis())
+        assertTrue(fake.capturedSectionTitles.isEmpty())
+
+        online = true
+        val newspaper = gen.generate(2, 0L, System.currentTimeMillis())
+        assertTrue(newspaper.sections.flatMap { it.stories }.any { it.headline == "LLM Headline" })
+    }
+
+    @Test
+    fun `privacy redaction keeps death causes but strips player text`() {
+        store.record(event(EventType.DEATH, player = "Steve", details = mapOf("message" to "Steve was blown up by Creeper")))
+        store.record(event(EventType.CHAT, player = "Alex", details = mapOf("message" to "my base is at 100 64 200")))
+        store.record(event(EventType.SIGN_EDIT, player = "Alex", details = mapOf("text" to "Private | Keep out")))
+        val newspaper = NewspaperGenerator(store, config, null, false, logger).generate(1, 0L, System.currentTimeMillis())
+        val copy = newspaper.sections.flatMap { it.stories }.joinToString("\n") { it.headline + " " + it.body }
+
+        assertTrue("Steve was blown up by Creeper" in copy, copy)
+        assertTrue("my base" !in copy)
+        assertTrue("Keep out" !in copy)
     }
 
     @Test

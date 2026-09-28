@@ -10,6 +10,7 @@ import uk.ewancroft.chronicler.config.TrackingConfig
 import uk.ewancroft.chronicler.news.ChronicleEvent
 import uk.ewancroft.chronicler.news.EventStore
 import uk.ewancroft.chronicler.news.EventType
+import uk.ewancroft.chronicler.util.plain
 
 class DeathTracker(
     private val store: EventStore,
@@ -21,7 +22,7 @@ class DeathTracker(
         if (!tracking.deaths) return
         val player = event.player
         val killer = player.killer
-        val message = event.deathMessage()?.toString() ?: "died"
+        val message = event.deathMessage()?.plain() ?: "died"
 
         store.record(
             ChronicleEvent(
@@ -34,6 +35,10 @@ class DeathTracker(
                     "message" to message,
                     "killer" to (killer?.name ?: "environment"),
                     "killerUuid" to (killer?.uniqueId?.toString() ?: ""),
+                    // Only printed or mapped when privacy.include-coordinates is on.
+                    "x" to player.location.blockX.toString(),
+                    "y" to player.location.blockY.toString(),
+                    "z" to player.location.blockZ.toString(),
                 ),
             )
         )
@@ -55,7 +60,7 @@ class DeathTracker(
                 world = killer.world.name,
                 details = mapOf(
                     "entity" to entity.type.name.lowercase(),
-                    "entityName" to (entity.customName()?.toString() ?: entity.type.name.lowercase()),
+                    "entityName" to (entity.customName()?.plain() ?: entity.type.name.lowercase()),
                 ),
             )
         )

@@ -25,6 +25,7 @@ class LogParser(
     private val logsDir: Path,
     private val tracking: TrackingConfig,
     private val logger: Logger,
+    private val storeChatText: Boolean = false,
 ) {
 
     companion object {
@@ -46,7 +47,7 @@ class LogParser(
         private val ADVANCEMENT = Regex("^(\\w+) has (?:made the advancement|completed the challenge|reached the goal) \\[(.+)]$")
 
         // <Player> message
-        private val CHAT = Regex("^<(\\w+)> (.*)$")
+        private val CHAT = Regex("^(?:\\[Not Secure] )?<(\\w+)> (.*)$")
 
         // Death message patterns — Minecraft uses a fixed set of death message templates.
         // Each starts with the player name followed by a known verb phrase.
@@ -242,7 +243,7 @@ class LogParser(
                     playerName = m.groupValues[1],
                     playerUuid = "",
                     world = "server",
-                    details = mapOf("message" to m.groupValues[2].take(200)),
+                    details = if (storeChatText) mapOf("message" to m.groupValues[2].take(200)) else emptyMap(),
                 ))
             }
         }

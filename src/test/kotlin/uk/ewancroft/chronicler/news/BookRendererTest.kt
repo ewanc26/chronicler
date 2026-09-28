@@ -99,50 +99,76 @@ class BookRendererTest {
         assertTrue(meta.pageCount >= 3, "Should have title + section + footer")
     }
 
+    private fun sampleIssue(bodyLength: Int = 900) = Newspaper(
+        issueNumber = 3,
+        fromTime = 0L,
+        toTime = 1000L,
+        sections = (1..4).map { i ->
+            NewspaperSection("Section $i", (1..3).map { j ->
+                Story("Headline $i.$j for the day", (1..bodyLength / 6).joinToString(" ") { "word$it" }, listOf("Steve", "Alex"), null)
+            })
+        },
+    )
+
     @Test
-    fun `renderToBook page count matches sections plus title and footer`() {
-        val newspaper = Newspaper(
-            issueNumber = 1,
-            fromTime = 0L,
-            toTime = 1000L,
-            sections = (1..5).map { i ->
-                NewspaperSection("Section $i", listOf(Story("H$i", "B$i", emptyList(), null)))
-            },
-        )
-        val renderer = BookRenderer(config)
-        val book = renderer.renderToBook(newspaper)
-        val meta = book.itemMeta as BookMeta
-        assertEquals(7, meta.pageCount, "Should be 1 title + 5 sections + 1 footer")
+    fun `every page fits the book screen without clipping`() {
+        val pages = BookRenderer(config).layout(sampleIssue())
+        pages.forEachIndexed { index, page ->
+            assertTrue(page.size <= BookRenderer.LINES_PER_PAGE, "page ${index + 1} has ${page.size} lines")
+            page.forEach { line ->
+                assertTrue(MinecraftFont.width(line.plain, line.bold) <= BookRenderer.PAGE_WIDTH, "line too wide: '${line.plain}'")
+            }
+        }
     }
 
     @Test
-    fun `renderToBook gives each article a complete page`() {
-        val newspaper = Newspaper(
-            issueNumber = 1,
-            fromTime = 0L,
-            toTime = 1000L,
-            sections = listOf(
-                NewspaperSection(
-                    "Local News",
-                    listOf(
-                        Story("First", "First article.", emptyList(), null),
-                        Story("Second", "Second article.", emptyList(), null),
-                    ),
-                ),
-            ),
-        )
-        val meta = BookRenderer(config).renderToBook(newspaper).itemMeta as BookMeta
-
-        assertEquals(4, meta.pageCount, "Should be title + one page per article + footer")
+    fun `no article text is lost across page breaks`() {
+        val issue = sampleIssue()
+        val text = BookRenderer(config).layout(issue).flatten().joinToString(" ") { it.plain }
+        val words = text.split(Regex("\\s+")).toSet()
+        issue.sections.flatMap { it.stories }.forEach { story ->
+            story.body.split(" ").forEach { word -> assertTrue(word in words, "missing '$word'") }
+        }
     }
 
     @Test
-    fun `long articles split without losing words`() {
-        val body = (1..80).joinToString(" ") { "word$it" }
-        val pages = BookRenderer.splitArticle(body, 80)
+    fun `contents on the cover link to each section's first page`() {
+        val issue = sampleIssue(bodyLength = 60)
+        val pages = BookRenderer(config).layout(issue)
+        val contents = pages.first().filter { it.plain.startsWith("• ") }
+        assertEquals(issue.sections.size, contents.size)
+        contents.zip(issue.sections).forEach { (line, section) ->
+            val page = line.plain.substringAfterLast(' ').toInt()
+            assertTrue(pages[page - 1].first().plain.startsWith(section.title.uppercase()), "entry for ${section.title} points at page $page")
+        }
+    }
 
-        assertTrue(pages.size > 1)
-        assertTrue(pages.all { it.length <= 80 })
-        assertEquals(body, pages.joinToString(" "))
+    @Test
+    fun `long issues are capped at the book page limit`() {
+        val pages = BookRenderer(config).layout(sampleIssue(bodyLength = 20_000))
+        assertEquals(BookRenderer.MAX_PAGES, pages.size)
+    }
+
+    @Test
+    fun `newspaper items carry their issue number and legacy copies are recognised`() {
+        val book = BookRenderer(config).renderToBook(sampleIssue(bodyLength = 60))
+        assertEquals(3, BookRenderer.issueNumberOf(book))
+
+        val legacy = org.bukkit.inventory.ItemStack(Material.WRITTEN_BOOK)
+        legacy.itemMeta = (legacy.itemMeta as BookMeta).apply { setTitle("Test Chronicle #7"); setAuthor("Tester") }
+        assertEquals(7, BookRenderer.issueNumberOf(legacy, config))
+        assertEquals(null, BookRenderer.issueNumberOf(legacy))
+
+        val stranger = org.bukkit.inventory.ItemStack(Material.WRITTEN_BOOK)
+        stranger.itemMeta = (stranger.itemMeta as BookMeta).apply { setTitle("Test Chronicle #7"); setAuthor("Someone") }
+        assertEquals(null, BookRenderer.issueNumberOf(stranger, config))
+    }
+
+    @Test
+    fun `wrap splits words wider than a line`() {
+        val lines = MinecraftFont.wrap("x".repeat(60), BookRenderer.PAGE_WIDTH)
+        assertTrue(lines.size > 1)
+        assertTrue(lines.all { MinecraftFont.width(it) <= BookRenderer.PAGE_WIDTH })
+        assertEquals("x".repeat(60), lines.joinToString(""))
     }
 }

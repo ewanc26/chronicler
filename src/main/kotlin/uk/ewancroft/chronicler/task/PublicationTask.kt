@@ -16,6 +16,7 @@ import uk.ewancroft.chronicler.news.Newspaper
 import uk.ewancroft.chronicler.news.NewspaperGenerator
 import uk.ewancroft.chronicler.news.WebRenderer
 import uk.ewancroft.chronicler.tracker.SubscribeStore
+import uk.ewancroft.chronicler.util.writeAtomically
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.Calendar
@@ -38,6 +39,10 @@ class PublicationTask(
     private val logger: Logger,
     private val activationTime: Long,
     private val logsDir: Path? = null,
+    /** Called (on the server thread) whenever an issue becomes the current one. */
+    private val onIssueReady: (Newspaper) -> Unit = {},
+    /** Called (on the server thread) only when a new issue has actually been published. */
+    private val onPublished: (Newspaper) -> Unit = {},
 ) {
 
     private var issueNumber = 0
@@ -60,7 +65,7 @@ class PublicationTask(
         if (issueNumber == 0 && lastPublishTime == 0L) {
             // First run — backfill from server logs if enabled
             if (config.backfillEnabled && logsDir != null) {
-                val parser = LogParser(logsDir, config.tracking, logger)
+                val parser = LogParser(logsDir, config.tracking, logger, storeChatText = config.privacy.includeChatExcerpts)
                 val parsedEvents = parser.parse(config.backfillMaxLogFiles)
                 if (parsedEvents.isNotEmpty()) {
                     store.recordAll(parsedEvents)
@@ -91,6 +96,7 @@ class PublicationTask(
             latestNewspaper = newspaper
             latestBook = bookRenderer.renderToBook(newspaper)
             webRenderer?.renderAndServe(newspaper)
+            onIssueReady(newspaper)
             logger.info("Restored issue #${newspaper.issueNumber} from the archive (${newspaper.sections.sumOf { it.stories.size }} stories).")
         } catch (e: Exception) {
             logger.log(Level.WARNING, "Failed to restore archived issue #${newspaper.issueNumber}.", e)
@@ -292,6 +298,9 @@ class PublicationTask(
 
             webRenderer?.renderAndServe(newspaper)
             if (webRenderer != null) logger.info("Rendered web edition for issue #$number.")
+            // onPublished first: the async print started by onIssueReady relies on it having run.
+            onPublished(newspaper)
+            onIssueReady(newspaper)
 
             lastPublishTime = toTime
             lastPublishGameTime = currentGameTime()
@@ -332,8 +341,7 @@ class PublicationTask(
 
     private fun saveState() {
         try {
-            Files.createDirectories(stateFile.parent)
-            Files.writeString(stateFile, "$issueNumber\n$lastPublishTime\n$lastPublishGameTime")
+            stateFile.writeAtomically("$issueNumber\n$lastPublishTime\n$lastPublishGameTime")
         } catch (e: Exception) {
             logger.log(Level.SEVERE, "Failed to save publication state to $stateFile.", e)
         }

@@ -1,9 +1,10 @@
 name: Chronicler
-version: 1.8.1
+version: '${version}'
 main: uk.ewancroft.chronicler.Chronicler
 api-version: '1.21'
 description: Tracks server events and generates a dynamic newspaper.
 author: ewanc26
+softdepend: [PlaceholderAPI, Vault, ViaVersion, floodgate, BlueMap, squaremap, Towny, Lands, LuckPerms, mcMMO, QuickShop-Hikari, Plan, Votifier, DiscordSRV]
 
 commands:
   chronicler:
@@ -14,6 +15,9 @@ commands:
 permissions:
   chronicler.use:
     description: Read the newspaper.
+    default: true
+  chronicler.write:
+    description: Send letters to the editor and classified adverts.
     default: true
   chronicler.admin:
     description: Admin commands for Chronicler.

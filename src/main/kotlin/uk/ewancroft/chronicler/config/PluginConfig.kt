@@ -54,7 +54,19 @@ data class NewspaperConfig(
     val primaryTextColor: Int = 0x1F1A14,
     val secondaryTextColor: Int = 0x3D342A,
     val mutedTextColor: Int = 0x5C4F40,
-)
+    val serverName: String = "",
+    /** Language tag for dates on printed pages and books (the reader uses each player's own). */
+    val locale: String = "en-GB",
+    /** "auto" (online-mode servers only), "true" or "false". */
+    val portraits: String = "auto",
+) {
+    val javaLocale: java.util.Locale get() = java.util.Locale.forLanguageTag(locale)
+
+    fun formatDate(time: Long, style: java.time.format.FormatStyle): String =
+        java.time.format.DateTimeFormatter.ofLocalizedDate(style)
+            .withLocale(javaLocale)
+            .format(java.time.Instant.ofEpochMilli(time).atZone(java.time.ZoneId.systemDefault()))
+}
 
 data class PrivacyConfig(
     val includePrivateMessages: Boolean,
@@ -67,7 +79,22 @@ data class WebConfig(
     val enabled: Boolean,
     val port: Int,
     val writeFiles: Boolean,
+    /** Base URL other people and services reach the web server on, e.g. http://play.example.com:8080. */
+    val publicUrl: String = "",
 )
+
+data class ReaderConfig(
+    /** "newspaper" opens the typeset page reader; "book" keeps the classic written book. */
+    val mode: String,
+    val packEnabled: Boolean,
+    val packRequired: Boolean,
+    val packPrompt: String,
+    /** On-screen width of a page in GUI pixels (a multiple of 8, 256-512). */
+    val pageWidth: Int,
+) {
+    val newspaperMode: Boolean get() = mode != "book"
+    val tileGuiSize: Int get() = pageWidth / 8
+}
 
 class PluginConfig(private val config: FileConfiguration) {
 
@@ -81,6 +108,12 @@ class PluginConfig(private val config: FileConfiguration) {
     val llm: LlmConfig
     val newspaper: NewspaperConfig
     val web: WebConfig
+    val reader: ReaderConfig
+    val standardSite: uk.ewancroft.chronicler.publish.StandardSiteConfig
+    val discord: uk.ewancroft.chronicler.publish.DiscordConfig
+    val integrations: uk.ewancroft.chronicler.integration.IntegrationConfig
+    val contributionsEnabled: Boolean
+    val contributionLimits: uk.ewancroft.chronicler.contrib.ContributionLimits
     val configVersion: Int
     val tickerInterval: Long
     val papiEnabled: Boolean
@@ -151,11 +184,50 @@ class PluginConfig(private val config: FileConfiguration) {
             primaryTextColor = color(config.getString("newspaper.colors.primary"), 0x1F1A14),
             secondaryTextColor = color(config.getString("newspaper.colors.secondary"), 0x3D342A),
             mutedTextColor = color(config.getString("newspaper.colors.muted"), 0x5C4F40),
+            serverName = config.getString("newspaper.server-name", "")?.trim().orEmpty(),
+            portraits = (config.getString("newspaper.portraits", "auto") ?: "auto").lowercase(),
+            locale = config.getString("newspaper.locale", "en-GB")?.trim().takeUnless { it.isNullOrEmpty() } ?: "en-GB",
         )
         web = WebConfig(
             enabled = config.getBoolean("web.enabled", true),
             port = config.getInt("web.port", 8080).coerceIn(1024, 65535),
             writeFiles = config.getBoolean("web.write-files", true),
+            publicUrl = (config.getString("web.public-url", "") ?: "").trim().trimEnd('/'),
+        )
+        reader = ReaderConfig(
+            mode = (config.getString("reader.mode", "newspaper") ?: "newspaper").lowercase(),
+            packEnabled = config.getBoolean("reader.resource-pack.enabled", true),
+            packRequired = config.getBoolean("reader.resource-pack.required", false),
+            packPrompt = config.getString("reader.resource-pack.prompt", "") ?: "",
+            pageWidth = (config.getInt("reader.page-width", 336).coerceIn(256, 512) / 8) * 8,
+        )
+        standardSite = uk.ewancroft.chronicler.publish.StandardSiteConfig(
+            enabled = config.getBoolean("publish.standard-site.enabled", false),
+            identifier = config.getString("publish.standard-site.identifier", "")?.trim().orEmpty().removePrefix("@"),
+            appPassword = config.getString("publish.standard-site.app-password", "")?.trim().orEmpty(),
+            pdsUrl = config.getString("publish.standard-site.pds-url", "")?.trim().orEmpty(),
+            announce = config.getBoolean("publish.standard-site.announce-on-bluesky", false),
+        )
+        discord = uk.ewancroft.chronicler.publish.DiscordConfig(
+            enabled = config.getBoolean("publish.discord.enabled", false),
+            webhookUrl = config.getString("publish.discord.webhook-url", "")?.trim().orEmpty(),
+            mention = config.getString("publish.discord.mention", "")?.trim().orEmpty(),
+            useDiscordSrv = config.getBoolean("publish.discord.use-discordsrv", true),
+        )
+        integrations = uk.ewancroft.chronicler.integration.IntegrationConfig(
+            towny = config.getBoolean("integrations.towny", true),
+            lands = config.getBoolean("integrations.lands", true),
+            mcmmo = config.getBoolean("integrations.mcmmo", true),
+            mcmmoMilestone = config.getInt("integrations.mcmmo-milestone", 100).coerceAtLeast(1),
+            luckperms = config.getBoolean("integrations.luckperms", true),
+            quickshop = config.getBoolean("integrations.quickshop", true),
+            votifier = config.getBoolean("integrations.votifier", true),
+            plan = config.getBoolean("integrations.plan", true),
+        )
+        contributionsEnabled = config.getBoolean("contributions.enabled", true)
+        contributionLimits = uk.ewancroft.chronicler.contrib.ContributionLimits(
+            requireApproval = config.getBoolean("contributions.require-approval", true),
+            maxPendingPerPlayer = config.getInt("contributions.max-pending-per-player", 2).coerceIn(1, 20),
         )
         bStatsEnabled = config.getBoolean("bstats-enabled", true)
         autoUpdateEnabled = config.getBoolean("auto-update.enabled", true)
