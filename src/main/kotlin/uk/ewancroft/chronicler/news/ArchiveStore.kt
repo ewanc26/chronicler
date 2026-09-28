@@ -6,6 +6,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.util.logging.Logger
+import uk.ewancroft.chronicler.util.writeAtomically
 
 class ArchiveStore(
     private val archiveDir: Path,
@@ -24,9 +25,7 @@ class ArchiveStore(
         synchronized(archives) {
             archives.add(newspaper)
             try {
-                Files.createDirectories(archiveDir)
-                val file = archiveDir.resolve("issue-${newspaper.issueNumber}.json")
-                file.toFile().writeText(json.encodeToString(newspaper))
+                archiveDir.resolve("issue-${newspaper.issueNumber}.json").writeAtomically(json.encodeToString(newspaper))
                 prune()
             } catch (e: Exception) {
                 logger.warning("Failed to archive issue #${newspaper.issueNumber}: ${e.message}")

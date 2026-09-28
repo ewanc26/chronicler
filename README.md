@@ -16,7 +16,7 @@ A PaperMC plugin that tracks server events and generates a dynamic in-game newsp
 - **Web View** — Optional embedded HTTP server serves a styled HTML version of each issue with dark/light theme toggle and RSS feed
 - **Editorial Workflow** — Create, preview, edit, remove stories from, and approve persistent draft issues
 - **Newspaper Layout** — Ranked articles with configurable bylines, tone, section order, colours, and clean continuation pages
-- **Privacy Controls** — Exclude players and redact private messages, chat excerpts, and coordinates
+- **Privacy Controls** — Exclude players and redact private messages, chat excerpts, and coordinates; with chat excerpts off, chat text is never stored at all
 - **Archive & Search** — Retention policies, import/export, web issue navigation, permalinks, and full-text search
 - **Safe Updates** — Automatic GitHub release updates with mandatory SHA-256 verification
 - **PlaceholderAPI** — 13+ placeholders exposing issue stats, player playtime, login streaks
@@ -26,8 +26,65 @@ A PaperMC plugin that tracks server events and generates a dynamic in-game newsp
 - **Auto-Delivery** — Each new issue spawns directly into every online player's inventory (drops at feet if full); players can opt out with `/chronicler subscribe`
 - **Locale Support** — All messages customizable via `messages.yml` (MiniMessage format)
 - **bStats Metrics** — Anonymous usage statistics (configurable)
-- **Paper Plugin Support** — Includes `paper-plugin.yml` with soft dependency declarations for PlaceholderAPI and Vault
+- **Paper Plugin Support** — Includes `paper-plugin.yml` declaring every optional integration
 - **Update Checker** — Checks GitHub for newer releases on startup
+
+## The In-Game Newspaper
+
+![The printed edition in the Minecraft client](docs/images/reader-in-game.png)
+
+Each issue is typeset as broadsheet pages (blackletter masthead, dateline, lead story with drop cap, justified columns, section bands and a statistics box) and shown in a reader screen when a player right-clicks their newspaper or runs `/chronicler read`.
+
+How it works:
+
+- Chronicler builds a small resource pack for the latest issue (about 250 KB per page) and serves it from the embedded web server. Players are offered it on join and after each new issue; it only ever replaces Chronicler's own pack.
+- Pages are drawn as bitmap-font glyphs inside a dialog, so no client mod is needed. The pack also gives newspapers their own item texture.
+- A multi-page issue gets page arrows, and a **Text edition** button in the printed reader switches the same issue to large-type dialog pages (and back), without reopening it.
+- Players who decline the pack get the same text edition automatically, with section-by-section navigation, and the item is still a normal written book, laid out to fit book pages exactly.
+- Old papers printed by earlier versions open in the reader too.
+
+Set `web.public-url` to the address people reach your web server on (for example `http://play.example.com:8080`). It is used for the pack download, printed page images (`/print/<issue>/page-<n>.png`) and links in Discord and Standard.site posts. If it is blank, `server-ip` is used; if that is blank too, the pack is only written to `plugins/Chronicler/web/chronicler-pack.zip` for you to host. Modern clients stack server resource packs, so Chronicler's pack sits alongside your own; `/chronicler pack export` writes it (and the page images) out if you prefer to merge or host it yourself. Set `reader.mode: book` to keep the classic written book only.
+
+**Every client gets something readable.** Players on older Java versions (through ViaVersion) are not offered the 26.x pack and read the laid-out book, since ViaBackwards would turn dialogs into chest menus. Bedrock players (through Geyser/Floodgate) get the text edition as Bedrock forms. Dates in the reader follow each player's client language; printed pages use `newspaper.locale`.
+
+**Portraits.** With `newspaper.portraits` on (default `auto`: online-mode servers only, since offline-mode names may belong to someone else's Mojang account), players' skin faces are printed as duotone newsprint photographs beside their stories.
+
+## Letters, Adverts and Polls
+
+- `/chronicler write` opens a form to send a **letter to the editor** or a **classified advert** (older clients and the console: `/chronicler write letter|ad <headline> | <text>`). By default staff approve each one in `/chronicler submissions` before it prints; writers hear the outcome.
+- `/chronicler poll create` starts a **reader poll** (2–6 options); players vote with `/chronicler poll` and can change their vote until the next issue, which prints the results as a bar chart and closes the poll.
+- Approved contributions appear in "Letters to the Editor", "Classifieds" and "Reader Poll", printed verbatim under the writer's name, and never twice.
+
+## Newsstands
+
+Look at an item frame on a wall (the top-left corner) and run `/chronicler newsstand create [cols] [rows]`, or from the console / a command block `/chronicler newsstand create <cols> <rows> <x> <y> <z> <facing> [world]`. Missing frames are placed for you. The wall shows each new front page as map art and opens the reader when right-clicked; `4 6` makes headlines legible from a few blocks away.
+
+## Beyond the Server
+
+- **Standard.site / AT Protocol** (`publish.standard-site`): each issue is published as a `site.standard.document` under a `site.standard.publication` for your paper, with the front page as its cover and the full text, so it can be read in Standard.site readers. Optionally it is announced on Bluesky with a link card. Use an app password; the web server serves `/.well-known/site.standard.publication` and per-issue `<link rel="site.standard.document">` tags for verification. Needs an `https://` `web.public-url`.
+- **Discord** (`publish.discord`): each issue is posted through a channel webhook with the front page attached, the lead story and section headlines. Without a webhook, DiscordSRV's main channel is used if installed.
+- Only newly published issues are announced; `/chronicler announce [all|standard-site|discord]` re-sends the current one.
+- **Web maps:** with `privacy.include-coordinates: true`, stories with a location appear as markers on **BlueMap** and **squaremap**, linking to the web edition.
+
+## Plugin Integrations
+
+Used automatically when installed (toggle under `integrations:`):
+
+| Plugin | In the paper |
+|---|---|
+| Towny, Lands | **Civic Affairs**: towns and nations founded, joined and fallen; wars declared and won |
+| mcMMO | **Rising Stars**: skills crossing every 100 levels |
+| LuckPerms | **Rising Stars**: promotions along tracks |
+| QuickShop-Hikari | **Market Report**: sales, average prices, busiest shop |
+| NuVotifier | **Votes**: server-list votes and top voters |
+| Plan | Chronicler numbers on Plan's server and player pages |
+| ViaVersion, Geyser/Floodgate | The right reader for older Java and Bedrock clients |
+| BlueMap, squaremap | Story markers (see above) |
+| DiscordSRV | Discord posts without a webhook |
+
+<img src="docs/images/front-page.png" alt="A typeset front page" width="360">
+
+Fonts: [UnifrakturMaguntia](https://github.com/google/fonts/tree/main/ofl/unifrakturmaguntia) and [Old Standard TT](https://github.com/google/fonts/tree/main/ofl/oldstandardtt), both under the SIL Open Font License (included in `src/main/resources/fonts/`).
 
 ## Requirements
 
@@ -36,6 +93,7 @@ A PaperMC plugin that tracks server events and generates a dynamic in-game newsp
 - **Optional:** [PlaceholderAPI](https://www.spigotmc.org/resources/placeholderapi.6245/) for placeholder expansion
 - **Optional:** [Vault](https://www.spigotmc.org/resources/vault.34315/) for economy tracking
 - **Optional:** Ollama, OpenAI, OpenRouter, or Anthropic API key for LLM articles
+- **Optional:** any of the plugins under [Plugin Integrations](#plugin-integrations)
 
 ## Installation
 
@@ -80,20 +138,28 @@ bstats-enabled: true
 # LLM article generation (set enabled: false for template-only mode)
 llm:
   enabled: true
-  provider: ollama    # ollama, openai, anthropic
+  provider: ollama    # ollama, openai, anthropic, lmstudio, cocore
   model: llama3.2
   api-key: ""
   base-url: https://openrouter.ai/api/v1
   ollama-url: http://localhost:11434
   timeout-seconds: 30
+  # {series_title} comes from newspaper.title; {server_name} from newspaper.server-name
   system-prompt: "You are the editor of \"{series_title}\"..."
+
+newspaper:
+  title: "The Weekly Chronicle"
+  server-name: ""     # blank = "this server"
 ```
+
+The LLM is probed asynchronously at startup and again before each issue, so a model server started after Minecraft is picked up automatically; while it is unreachable, issues use template copy.
 
 ## Commands
 
 | Command | Permission | Description |
 |---|---|---|
-| `/chronicler read` | `chronicler.use` | Receive the latest issue as a book |
+| `/chronicler read` | `chronicler.use` | Receive and open the latest issue |
+| `/chronicler read <player>` | `chronicler.admin` | Hand a player the latest issue and open it for them |
 | `/chronicler web` | `chronicler.use` | Show the web view URL |
 | `/chronicler status` | `chronicler.admin` | Show plugin status |
 | `/chronicler stats <player>` | `chronicler.use` | View a player's tracked stats |
@@ -108,8 +174,15 @@ llm:
 | `/chronicler editor remove <section> <story>` | `chronicler.admin` | Remove a draft story |
 | `/chronicler editor publish` | `chronicler.admin` | Approve and publish the draft |
 | `/chronicler diagnostics` | `chronicler.admin` | Show subsystem and updater health |
-| `/chronicler reload` | `chronicler.admin` | Reload configuration |
+| `/chronicler reload` | `chronicler.admin` | Reload configuration and restart all subsystems |
 | `/chronicler publish` | `chronicler.admin` | Force-publish a new issue now |
+| `/chronicler write [letter\|ad <headline> \| <text>]` | `chronicler.write` | Send a letter to the editor or a classified advert |
+| `/chronicler poll [vote <n>]` | `chronicler.use` | Vote in the reader poll |
+| `/chronicler poll create\|cancel\|results` | `chronicler.admin` | Run the reader poll |
+| `/chronicler submissions [approve\|reject <id>]` | `chronicler.admin` | Review letters and adverts |
+| `/chronicler newsstand create\|remove\|list` | `chronicler.admin` | Manage newsstands |
+| `/chronicler pack status\|export` | `chronicler.admin` | Newspaper resource pack status; export pack and page images |
+| `/chronicler announce [all\|standard-site\|discord]` | `chronicler.admin` | Re-send the current issue |
 
 Alias: `/clr`
 
@@ -135,8 +208,9 @@ Alias: `/clr`
 
 | Permission | Default | Description |
 |---|---|---|
-| `chronicler.use` | `true` | Use basic commands |
-| `chronicler.admin` | `op` | Reload, publish, archive read |
+| `chronicler.use` | `true` | Read the paper, vote, subscribe |
+| `chronicler.write` | `true` | Send letters and classified adverts |
+| `chronicler.admin` | `op` | Reload, publish, moderation, newsstands, publishing |
 
 ## Building from Source
 
@@ -162,6 +236,11 @@ The compiled jar will be in `build/libs/` with the current release name.
 - `plugins/Chronicler/publish-state.json` — Last publish time and issue number
 - `plugins/Chronicler/archive/issue-*.json` — Archived issues
 - `plugins/Chronicler/messages.yml` — Localized message strings (MiniMessage)
+- `plugins/Chronicler/contributions.json` — Letters, adverts and the current poll
+- `plugins/Chronicler/newsstands.json` — Newsstand locations and map IDs
+- `plugins/Chronicler/standard-site.json` — Standard.site record keys and URIs
+- `plugins/Chronicler/portraits/` — Cached player faces
+- `plugins/Chronicler/web/chronicler-pack.zip` — The current newspaper resource pack
 
 ## Support
 

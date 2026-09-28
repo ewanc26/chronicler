@@ -19,6 +19,7 @@ import uk.ewancroft.chronicler.config.TrackingConfig
 import uk.ewancroft.chronicler.news.ChronicleEvent
 import uk.ewancroft.chronicler.news.EventStore
 import uk.ewancroft.chronicler.news.EventType
+import uk.ewancroft.chronicler.util.plain
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
 
 class PlayerActionTracker(
@@ -82,7 +83,8 @@ class PlayerActionTracker(
     fun onSignChange(event: SignChangeEvent) {
         if (!tracking.misc) return
         val player = event.player
-        val lines = event.lines().joinToString(" | ") { it.toString().take(40) }.take(200)
+        val lines = event.lines().map { it.plain().trim() }.filter { it.isNotEmpty() }.joinToString(" | ") { it.take(40) }.take(200)
+        if (lines.isEmpty()) return
         store.record(
             ChronicleEvent(
                 type = EventType.SIGN_EDIT,

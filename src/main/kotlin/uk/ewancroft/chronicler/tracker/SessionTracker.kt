@@ -1,5 +1,6 @@
 package uk.ewancroft.chronicler.tracker
 
+import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.player.PlayerJoinEvent
@@ -18,6 +19,28 @@ class SessionTracker(
 ) : Listener {
 
     private val activeSessions = mutableMapOf<String, Long>()
+
+    /**
+     * Starts timing sessions for players who are already online, e.g. when the
+     * plugin is enabled or reloaded mid-game, so their playtime is not lost.
+     */
+    fun resumeSessions(players: Collection<Player>, now: Long = System.currentTimeMillis()) {
+        players.forEach { activeSessions.putIfAbsent(it.uniqueId.toString(), now) }
+    }
+
+    /**
+     * Credits playtime accrued so far by online players without ending their
+     * sessions. Called on disable/reload: Paper disables plugins before it
+     * disconnects players on shutdown, so their quit events never arrive here.
+     */
+    fun checkpointSessions(players: Collection<Player>, now: Long = System.currentTimeMillis()) {
+        players.forEach { player ->
+            val uuid = player.uniqueId.toString()
+            val joinTime = activeSessions[uuid] ?: return@forEach
+            sessionStore.getOrCreate(uuid, player.name).totalPlaytimeTicks += (now - joinTime) / 50
+            activeSessions[uuid] = now
+        }
+    }
 
     @EventHandler
     fun onPlayerJoin(event: PlayerJoinEvent) {
@@ -81,10 +104,12 @@ class SessionTracker(
         if (joinTime != null) {
             val sessionTicks = (now - joinTime) / 50
             val data = sessionStore.getOrCreate(uuid, player.name)
+            val minutesBefore = data.totalPlaytimeTicks / TICKS_PER_MINUTE
             data.totalPlaytimeTicks += sessionTicks
 
-            val totalMinutes = data.totalPlaytimeTicks / (20 * 60)
-            if (totalMinutes > 0 && totalMinutes % 60 == 0L) {
+            val totalMinutes = data.totalPlaytimeTicks / TICKS_PER_MINUTE
+            // Report each whole hour of playtime crossed during this session.
+            if (totalMinutes / 60 > minutesBefore / 60) {
                 store.record(
                     ChronicleEvent(
                         type = EventType.MILESTONE_PLAYTIME,
@@ -109,5 +134,9 @@ class SessionTracker(
                 )
             )
         }
+    }
+
+    private companion object {
+        const val TICKS_PER_MINUTE = 20L * 60
     }
 }

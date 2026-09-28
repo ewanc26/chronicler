@@ -51,13 +51,10 @@ class AnthropicProvider(private val config: LlmConfig) : LlmProvider {
 
     override fun generate(systemPrompt: String, sectionTitle: String, eventSummary: String): ArticleResult? {
         val prompt = buildPrompt(sectionTitle, eventSummary)
-        val resolvedSystemPrompt = systemPrompt
-            .replace("{series_title}", "The Weekly Chronicle")
-            .replace("{server_name}", "this server")
 
         val requestBody = buildJsonObject {
             put("model", JsonPrimitive(config.model))
-            put("system", JsonPrimitive(resolvedSystemPrompt))
+            put("system", JsonPrimitive(systemPrompt))
             put("max_tokens", JsonPrimitive(300))
             putJsonArray("messages") {
                 add(buildJsonObject {

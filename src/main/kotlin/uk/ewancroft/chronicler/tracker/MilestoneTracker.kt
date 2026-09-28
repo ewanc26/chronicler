@@ -9,22 +9,21 @@ import uk.ewancroft.chronicler.config.TrackingConfig
 import uk.ewancroft.chronicler.news.ChronicleEvent
 import uk.ewancroft.chronicler.news.EventStore
 import uk.ewancroft.chronicler.news.EventType
-import java.util.UUID
+import uk.ewancroft.chronicler.util.plain
 
 class MilestoneTracker(
     private val store: EventStore,
     private val tracking: TrackingConfig,
 ) : Listener {
 
-    private val seenPlayers = mutableSetOf<UUID>()
-
     @EventHandler
     fun onPlayerJoin(event: PlayerJoinEvent) {
         val player = event.player
         val uuid = player.uniqueId
 
-        if (!seenPlayers.contains(uuid)) {
-            seenPlayers.add(uuid)
+        // hasPlayedBefore() is backed by the player's saved data, so unlike an
+        // in-memory set it survives restarts and reloads.
+        if (!player.hasPlayedBefore()) {
             store.record(
                 ChronicleEvent(
                     type = EventType.FIRST_JOIN,
@@ -71,7 +70,7 @@ class MilestoneTracker(
                 world = player.world.name,
                 details = mapOf(
                     "advancement" to path,
-                    "displayName" to adv.displayName().toString()
+                    "displayName" to (adv.display?.title()?.plain() ?: adv.displayName().plain().removeSurrounding("[", "]"))
                 ),
             )
         )

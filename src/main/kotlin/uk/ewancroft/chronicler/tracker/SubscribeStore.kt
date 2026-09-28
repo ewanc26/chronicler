@@ -5,13 +5,20 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.logging.Level
+import java.util.logging.Logger
+import uk.ewancroft.chronicler.util.quarantineCorrupt
+import uk.ewancroft.chronicler.util.writeAtomically
 
 @Serializable
 data class SubscriptionData(
     val subscribed: Boolean = true,
 )
 
-class SubscribeStore(private val dataPath: Path) {
+class SubscribeStore(
+    private val dataPath: Path,
+    private val logger: Logger? = null,
+) {
 
     private val json = Json { ignoreUnknownKeys = true; prettyPrint = true }
     private val subscriptions = mutableMapOf<String, SubscriptionData>()
@@ -39,16 +46,17 @@ class SubscribeStore(private val dataPath: Path) {
                     subscriptions.putAll(loaded)
                 }
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            dataPath.quarantineCorrupt(logger, e)
         }
     }
 
     fun save() {
         try {
-            Files.createDirectories(dataPath.parent)
             val snapshot = synchronized(subscriptions) { subscriptions.toMap() }
-            dataPath.toFile().writeText(json.encodeToString(snapshot))
-        } catch (_: Exception) {
+            dataPath.writeAtomically(json.encodeToString(snapshot))
+        } catch (e: Exception) {
+            logger?.log(Level.WARNING, "Failed to save subscriptions to ${dataPath.fileName}.", e)
         }
     }
 }

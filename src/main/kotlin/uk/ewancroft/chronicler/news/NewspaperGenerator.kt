@@ -14,8 +14,19 @@ class NewspaperGenerator(
     private val logger: Logger,
     private val llmSystemPrompt: String = "",
     private val privacyConfig: PrivacyConfig = PrivacyConfig(false, false, false, emptySet()),
+    /**
+     * Checked once at the start of each issue (on the async generation thread)
+     * so a provider that comes online after startup is picked up, and one that
+     * goes away falls back to template copy without a request per section.
+     */
+    private val llmAvailability: (() -> Boolean)? = null,
+    /** Reader contributions (letters, classifieds, poll results) to print alongside the news. */
+    private val contributions: () -> List<NewspaperSection> = { emptyList() },
 ) {
     private val maxStories = newspaperConfig.storiesPerSection
+
+    @Volatile
+    private var llmActive = llmEnabled && llmProvider != null
 
     fun generate(issueNumber: Int, fromTime: Long, toTime: Long): Newspaper {
         val events = store.eventsSince(fromTime)
@@ -26,6 +37,14 @@ class NewspaperGenerator(
             .map(::redactEvent)
             .toList()
         logger.info("Generating issue #$issueNumber from ${events.size} events ($fromTime to $toTime).")
+        if (llmEnabled && llmProvider != null && llmAvailability != null) {
+            llmActive = try {
+                llmAvailability.invoke()
+            } catch (_: Exception) {
+                false
+            }
+            if (!llmActive) logger.warning("${llmProvider.name()} is not reachable; issue #$issueNumber will use template copy.")
+        }
         val sections = mutableListOf<NewspaperSection>()
 
         sections.addAll(generateHeadlines(events))
@@ -42,9 +61,21 @@ class NewspaperGenerator(
         sections.addAll(generateWorldEvents(events))
         sections.addAll(generateCommunityLife(events))
         sections.addAll(generateAdventures(events))
+        sections.addAll(generateCivicAffairs(events))
+        sections.addAll(generateRisingStars(events))
+        sections.addAll(generateMarketReport(events))
+        sections.addAll(generateVotes(events))
+        sections.addAll(runCatching(contributions).getOrElse {
+            logger.warning("Could not collect reader contributions: ${it.message}"); emptyList()
+        })
         if (newspaperConfig.showStatistics) {
             sections.add(generateStatistics(events))
         }
+
+        // Give stories a place on the map from their first located event. Coordinates only
+        // survive redaction when privacy.include-coordinates is on.
+        val located = sections.map { section -> section.copy(stories = section.stories.map { story -> locate(story, events) }) }
+        sections.clear(); sections.addAll(located)
 
         val order = newspaperConfig.sectionOrder.mapIndexed { index, title -> title.lowercase() to index }.toMap()
         val structuredSections = sections.map { section ->
@@ -302,6 +333,109 @@ class NewspaperGenerator(
         }
 
         return listOf(NewspaperSection("Social", stories.take(maxStories)))
+    }
+
+    // ---- Integrations (Towny, Lands, mcMMO, LuckPerms, QuickShop, NuVotifier) ----
+
+    private fun generateCivicAffairs(events: List<ChronicleEvent>): List<NewspaperSection> {
+        val civic = setOf(EventType.TOWN_FOUNDED, EventType.TOWN_FALLEN, EventType.TOWN_JOINED, EventType.NATION_FOUNDED,
+            EventType.NATION_FALLEN, EventType.NATION_JOINED, EventType.WAR_DECLARED, EventType.WAR_ENDED)
+        // Founding a town also "adds" its mayor as a resident; that is not news twice over.
+        val founded = events.filter { it.type == EventType.TOWN_FOUNDED }.map { it.playerName to it.details["town"] }.toSet()
+        val civicEvents = events.filter { it.type in civic }
+            .filterNot { it.type == EventType.TOWN_JOINED && (it.playerName to it.details["town"]) in founded }
+        if (civicEvents.isEmpty()) return emptyList()
+        fun d(e: ChronicleEvent, k: String) = e.details[k] ?: "unknown"
+        val summary = civicEvents.joinToString("\n") { e ->
+            when (e.type) {
+                EventType.TOWN_FOUNDED -> "- ${e.playerName} founded the town of ${d(e, "town")}"
+                EventType.TOWN_FALLEN -> "- The town of ${d(e, "town")} fell (${d(e, "reason")})"
+                EventType.TOWN_JOINED -> "- ${e.playerName} became a resident of ${d(e, "town")}"
+                EventType.NATION_FOUNDED -> "- ${e.playerName} proclaimed the nation of ${d(e, "nation")}"
+                EventType.NATION_FALLEN -> "- The nation of ${d(e, "nation")} was dissolved"
+                EventType.NATION_JOINED -> "- ${d(e, "town")} joined the nation of ${d(e, "nation")}"
+                EventType.WAR_DECLARED -> "- ${d(e, "attacker")} declared war on ${d(e, "defender")}"
+                else -> "- ${d(e, "winner")} prevailed over ${d(e, "loser")}"
+            }
+        }
+        val stories = generateArticles("Civic Affairs", summary, civicEvents, maxStories = 4) ?: run {
+            val s = mutableListOf<Story>()
+            civicEvents.filter { it.type == EventType.WAR_DECLARED }.forEach { e ->
+                s += Story("War: ${d(e, "attacker")} Marches on ${d(e, "defender")}", "${d(e, "attacker")} declared war on ${d(e, "defender")}. Residents on both sides are advised to shore up their walls.", listOf(e.playerName), EventType.WAR_DECLARED)
+            }
+            civicEvents.filter { it.type == EventType.WAR_ENDED }.forEach { e ->
+                s += Story("${d(e, "winner")} Victorious", "The war between ${d(e, "winner")} and ${d(e, "loser")} is over, with ${d(e, "winner")} prevailing.", emptyList(), EventType.WAR_ENDED)
+            }
+            civicEvents.filter { it.type == EventType.TOWN_FOUNDED || it.type == EventType.NATION_FOUNDED }.forEach { e ->
+                val (kind, name) = if (e.type == EventType.TOWN_FOUNDED) "town" to d(e, "town") else "nation" to d(e, "nation")
+                s += Story("New ${kind.replaceFirstChar { it.uppercase() }}: $name", "${e.playerName} founded the $kind of $name this week.", listOf(e.playerName), e.type)
+            }
+            civicEvents.filter { it.type == EventType.TOWN_FALLEN || it.type == EventType.NATION_FALLEN }.forEach { e ->
+                val name = e.details["town"] ?: d(e, "nation")
+                s += Story("The End of $name", "$name is no more.", emptyList(), e.type)
+            }
+            val joins = civicEvents.filter { it.type == EventType.TOWN_JOINED || it.type == EventType.NATION_JOINED }
+            if (joins.isNotEmpty()) {
+                s += Story("Changing Allegiances", joins.joinToString("; ") { e ->
+                    if (e.type == EventType.TOWN_JOINED) "${e.playerName} moved to ${d(e, "town")}" else "${d(e, "town")} joined ${d(e, "nation")}"
+                } + ".", joins.map { it.playerName }.distinct(), EventType.TOWN_JOINED)
+            }
+            s.take(maxStories)
+        }
+        return listOf(NewspaperSection("Civic Affairs", stories))
+    }
+
+    private fun generateRisingStars(events: List<ChronicleEvent>): List<NewspaperSection> {
+        val skills = events.filter { it.type == EventType.SKILL_MILESTONE }
+        val ranks = events.filter { it.type == EventType.RANK_UP }
+        if (skills.isEmpty() && ranks.isEmpty()) return emptyList()
+        val summary = (skills.map { "- ${it.playerName} reached ${it.details["skill"]} level ${it.details["level"]}" } +
+            ranks.map { "- ${it.playerName} was promoted to ${it.details["rank"]}" }).joinToString("\n")
+        val stories = generateArticles("Rising Stars", summary, skills + ranks, maxStories = 4) ?: run {
+            val s = mutableListOf<Story>()
+            skills.sortedByDescending { it.details["level"]?.toIntOrNull() ?: 0 }.take(3).forEach { e ->
+                s += Story("${e.playerName} Masters ${e.details["skill"]}", "${e.playerName} reached level ${e.details["level"]} in ${e.details["skill"]}.", listOf(e.playerName), EventType.SKILL_MILESTONE)
+            }
+            if (ranks.isNotEmpty()) {
+                s += Story("Promotions", ranks.joinToString("; ") { "${it.playerName} to ${it.details["rank"]}" } + ".", ranks.map { it.playerName }.distinct(), EventType.RANK_UP)
+            }
+            s.take(maxStories)
+        }
+        return listOf(NewspaperSection("Rising Stars", stories))
+    }
+
+    private fun generateMarketReport(events: List<ChronicleEvent>): List<NewspaperSection> {
+        val sales = events.filter { it.type == EventType.SHOP_SALE }
+        if (sales.isEmpty()) return emptyList()
+        val total = sales.sumOf { it.details["total"]?.toDoubleOrNull() ?: 0.0 }
+        val byItem = sales.groupBy { it.details["item"] ?: "goods" }
+            .mapValues { (_, list) -> list.sumOf { it.details["amount"]?.toIntOrNull() ?: 0 } to list.sumOf { it.details["total"]?.toDoubleOrNull() ?: 0.0 } }
+            .entries.sortedByDescending { it.value.second }
+        val busiest = sales.groupBy { it.details["owner"] ?: "unknown" }.maxByOrNull { it.value.size }
+        fun pretty(item: String) = item.replace('_', ' ')
+        val summary = buildString {
+            appendLine("Shop trading: ${sales.size} sales worth ${"%.2f".format(total)} in total.")
+            byItem.take(5).forEach { (item, v) -> appendLine("- ${pretty(item)}: ${v.first} traded for ${"%.2f".format(v.second)} (about ${"%.2f".format(if (v.first == 0) 0.0 else v.second / v.first)} each)") }
+            busiest?.let { appendLine("- Busiest shop: ${it.key} with ${it.value.size} sales") }
+        }
+        val stories = generateArticles("Market Report", summary, sales, maxStories = 3) ?: run {
+            val s = mutableListOf<Story>()
+            s += Story("Trading Floor: ${sales.size} Sales", "Shops changed hands ${sales.size} times, worth ${"%.2f".format(total)} in all. " +
+                byItem.take(3).joinToString(" ") { (item, v) -> "${pretty(item).replaceFirstChar { it.uppercase() }} went for about ${"%.2f".format(if (v.first == 0) 0.0 else v.second / v.first)} each (${v.first} traded)." },
+                sales.flatMap { listOfNotNull(it.playerName, it.details["owner"]) }.distinct().take(6), EventType.SHOP_SALE)
+            busiest?.let { s += Story("Busiest Shop: ${it.key}", "${it.key}'s shop made ${it.value.size} sales this cycle.", listOf(it.key), EventType.SHOP_SALE) }
+            s.take(maxStories)
+        }
+        return listOf(NewspaperSection("Market Report", stories))
+    }
+
+    private fun generateVotes(events: List<ChronicleEvent>): List<NewspaperSection> {
+        val votes = events.filter { it.type == EventType.VOTE }
+        if (votes.isEmpty()) return emptyList()
+        val top = votes.groupBy { it.playerName }.entries.sortedByDescending { it.value.size }.take(5)
+        val body = "Readers cast ${votes.size} vote${if (votes.size == 1) "" else "s"} for the server this cycle. " +
+            "Most loyal: " + top.joinToString(", ") { "${it.key} (${it.value.size})" } + "."
+        return listOf(NewspaperSection("Votes", listOf(Story("Thank You, Voters", body, top.map { it.key }, EventType.VOTE))))
     }
 
     private fun generateBreakingNews(events: List<ChronicleEvent>): List<NewspaperSection> {
@@ -757,9 +891,11 @@ class NewspaperGenerator(
         events: List<ChronicleEvent>,
         maxStories: Int,
     ): List<Story>? {
-        if (!llmEnabled || llmProvider == null || summary.isBlank()) return null
+        if (!llmActive || llmProvider == null || summary.isBlank()) return null
 
         val systemPrompt = llmSystemPrompt
+            .replace("{series_title}", newspaperConfig.title)
+            .replace("{server_name}", newspaperConfig.serverName.ifBlank { "this server" })
             .replace("{tone}", newspaperConfig.tone)
             .replace("{maxArticleCharacters}", newspaperConfig.maxArticleCharacters.toString())
 
@@ -780,17 +916,31 @@ class NewspaperGenerator(
         }
     }
 
+    private fun locate(story: Story, events: List<ChronicleEvent>): Story {
+        if (story.location != null || story.eventType == null || story.players.isEmpty()) return story
+        val event = events.firstOrNull { e ->
+            e.type == story.eventType && e.playerName in story.players &&
+                e.details["x"]?.toIntOrNull() != null && e.details["z"]?.toIntOrNull() != null
+        } ?: return story
+        return story.copy(location = StoryLocation(event.world, event.details["x"]!!.toInt(), event.details["z"]!!.toInt(), event.details["y"]?.toIntOrNull()))
+    }
+
     private fun structureStory(story: Story): Story {
         val headline = story.headline.trim().replace(Regex("[\\r\\n]+"), " ").take(60).ifBlank { "News Brief" }
         val body = story.body.trim().replace(Regex("\\s+"), " ").ifBlank { "No further details were available at press time." }
         val completeBody = if (body.last() in ".!?") body else "$body."
-        return story.copy(headline = headline, body = completeBody, byline = newspaperConfig.byline)
+        // Reader contributions keep their own credit ("A letter from ...").
+        val credit = if (story.sourceId != null) story.byline else newspaperConfig.byline
+        return story.copy(headline = headline, body = completeBody, byline = credit)
     }
 
     private fun redactEvent(event: ChronicleEvent): ChronicleEvent {
+        // Only free text written by players counts as an excerpt; system text
+        // such as death messages shares the "message" key but must survive.
+        val playerAuthored = event.type in PLAYER_AUTHORED_TEXT
         val details = event.details.filterKeys { key ->
             val normalized = key.lowercase()
-            (privacyConfig.includeChatExcerpts || normalized !in setOf("text", "message", "chat")) &&
+            (privacyConfig.includeChatExcerpts || !playerAuthored || normalized !in setOf("text", "message", "chat")) &&
                 (privacyConfig.includeCoordinates || normalized !in setOf("x", "y", "z", "coordinates", "location"))
         }
         return event.copy(details = details)
@@ -802,5 +952,9 @@ class NewspaperGenerator(
         EventType.PVP_KILL, EventType.DEATH, EventType.EXPLOSION, EventType.LIGHTNING -> 60
         EventType.BIOME_DISCOVERY, EventType.ORE_DISCOVERY, EventType.TRADE -> 40
         else -> 20
+    }
+
+    private companion object {
+        val PLAYER_AUTHORED_TEXT = setOf(EventType.CHAT, EventType.SIGN_EDIT, EventType.MESSAGE_SENT)
     }
 }

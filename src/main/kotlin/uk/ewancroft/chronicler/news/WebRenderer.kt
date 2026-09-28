@@ -10,16 +10,29 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.text.SimpleDateFormat
 import java.util.Date
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.logging.Level
+import java.util.logging.Logger
 
 class WebRenderer(
     private val webConfig: WebConfig,
     private val newspaperConfig: uk.ewancroft.chronicler.config.NewspaperConfig,
     private val webDir: Path,
     private val archiveStore: ArchiveStore? = null,
+    private val logger: Logger? = null,
 ) {
 
+    /** Supplies Standard.site verification (publication URI and per-issue document links). */
+    @Volatile
+    var standardSite: uk.ewancroft.chronicler.publish.StandardSitePublisher? = null
+
+    /** Extra binary routes (the resource pack); returns null when the path is not handled. */
+    @Volatile
+    var assetProvider: ((String) -> ByteArray?)? = null
+
     private var server: HttpServer? = null
+    private var executor: ExecutorService? = null
     private var latestHtml: String = "<html><body><h1>No newspaper published yet.</h1></body></html>"
     private var latestRss: String = ""
     private var latestNewspaper: Newspaper? = null
@@ -56,7 +69,7 @@ class WebRenderer(
             val sectionSlug = slug(section.title)
             val storiesHtml = section.stories.mapIndexed { index, story ->
                 val playersHtml = if (story.players.isNotEmpty()) {
-                    "<p class=\"players\">— ${story.players.joinToString(", ")}</p>"
+                    "<p class=\"players\">— ${escapeHtml(story.players.joinToString(", "))}</p>"
                 } else ""
 
                 """
@@ -314,19 +327,49 @@ class WebRenderer(
     private fun startServer() {
         try {
             val addr = InetSocketAddress(webConfig.port)
-            server = HttpServer.create(addr, 0).also { srv ->
-                srv.createContext("/", this::handleRequest)
-                srv.executor = Executors.newFixedThreadPool(
-                    Runtime.getRuntime().availableProcessors().coerceIn(2, 8),
-                )
-                srv.start()
+            val pool = Executors.newFixedThreadPool(
+                Runtime.getRuntime().availableProcessors().coerceIn(2, 8),
+            )
+            try {
+                server = HttpServer.create(addr, 0).also { srv ->
+                    srv.createContext("/", this::handleRequest)
+                    srv.executor = pool
+                    srv.start()
+                }
+                executor = pool
+                logger?.info("Web edition serving on port ${webConfig.port}.")
+            } catch (e: Exception) {
+                pool.shutdownNow()
+                throw e
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            logger?.log(Level.WARNING, "Could not start web server on port ${webConfig.port}: ${e.message}")
         }
     }
 
     private fun handleRequest(exchange: HttpExchange) {
         val path = exchange.requestURI.path
+        assetProvider?.invoke(path)?.let { bytes ->
+            exchange.responseHeaders.set("Content-Type", if (path.endsWith(".png")) "image/png" else "application/zip")
+            exchange.sendResponseHeaders(200, bytes.size.toLong())
+            exchange.responseBody.use { it.write(bytes) }
+            return
+        }
+        if (path.startsWith("/print/") || path.startsWith("/chronicler-pack/")) {
+            // Stale or unknown asset: a clear 404 rather than the HTML front page.
+            exchange.sendResponseHeaders(404, -1)
+            exchange.close()
+            return
+        }
+        if (path == "/.well-known/site.standard.publication") {
+            val uri = standardSite?.state?.publicationUri
+            if (uri == null) { exchange.sendResponseHeaders(404, -1); exchange.close(); return }
+            val bytes = uri.toByteArray(StandardCharsets.UTF_8)
+            exchange.responseHeaders.set("Content-Type", "text/plain; charset=utf-8")
+            exchange.sendResponseHeaders(200, bytes.size.toLong())
+            exchange.responseBody.use { it.write(bytes) }
+            return
+        }
         if (path == "/rss.xml" || path == "/rss") {
             handleRssRequest(exchange)
             return
@@ -337,6 +380,11 @@ class WebRenderer(
                 ?: "<html><body><h1>Issue not found</h1><a href=\"/archive\">Archive</a></body></html>"
             path == "/search" -> renderSearch(exchange.requestURI.rawQuery)
             else -> latestHtml
+        }.let { page ->
+            // Standard.site document verification: <link rel="site.standard.document" href="at://...">
+            val number = if (path.startsWith("/issue/")) path.removePrefix("/issue/").toIntOrNull() else latestNewspaper?.issueNumber
+            val uri = number?.let { standardSite?.documentUri(it) }
+            if (uri == null) page else page.replaceFirst("</head>", "<link rel=\"site.standard.document\" href=\"${escapeHtml(uri)}\">\n</head>")
         }
         val bytes = html.toByteArray(StandardCharsets.UTF_8)
         exchange.responseHeaders.set("Content-Type", "text/html; charset=utf-8")
@@ -384,6 +432,8 @@ class WebRenderer(
     fun stop() {
         server?.stop(0)
         server = null
+        executor?.shutdownNow()
+        executor = null
     }
 
     private fun escapeHtml(text: String): String {

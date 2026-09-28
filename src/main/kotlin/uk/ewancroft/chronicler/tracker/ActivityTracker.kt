@@ -15,10 +15,13 @@ import uk.ewancroft.chronicler.config.TrackingConfig
 import uk.ewancroft.chronicler.news.ChronicleEvent
 import uk.ewancroft.chronicler.news.EventStore
 import uk.ewancroft.chronicler.news.EventType
+import uk.ewancroft.chronicler.util.plain
 
 class ActivityTracker(
     private val store: EventStore,
     private val tracking: TrackingConfig,
+    /** Mirrors privacy.include-chat-excerpts: without it, chat text is never persisted. */
+    private val storeChatText: Boolean = false,
 ) : Listener {
 
     @EventHandler
@@ -32,7 +35,7 @@ class ActivityTracker(
                 playerName = player.name,
                 playerUuid = player.uniqueId.toString(),
                 world = player.world.name,
-                details = mapOf("message" to event.message().toString().take(200)),
+                details = if (storeChatText) mapOf("message" to event.message().plain().take(200)) else emptyMap(),
             )
         )
     }

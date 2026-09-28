@@ -4,8 +4,14 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.logging.Logger
+import uk.ewancroft.chronicler.util.quarantineCorrupt
+import uk.ewancroft.chronicler.util.writeAtomically
 
-class EventStore(private val dataPath: Path) {
+class EventStore(
+    private val dataPath: Path,
+    private val logger: Logger? = null,
+) {
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -73,8 +79,7 @@ class EventStore(private val dataPath: Path) {
     fun save() {
         synchronized(events) {
             val jsonStr = json.encodeToString(events.toList())
-            Files.createDirectories(dataPath.parent)
-            dataPath.toFile().writeText(jsonStr)
+            dataPath.writeAtomically(jsonStr)
         }
     }
 
@@ -87,7 +92,8 @@ class EventStore(private val dataPath: Path) {
                     events.clear()
                     events.addAll(loaded.takeLast(maxEvents))
                 }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                dataPath.quarantineCorrupt(logger, e)
             }
         }
     }

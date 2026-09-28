@@ -94,6 +94,16 @@ newspaper:
   title: "The Weekly Chronicle"
   # Author name on the book.
   author: "Chronicler"
+  # Server name used for {server_name} in the LLM system prompt.
+  # Leave blank to refer to "this server".
+  server-name: ""
+  # Language for dates on printed pages and books (e.g. en-GB, en-US, de-DE).
+  # The in-game reader shows dates in each player's own client language.
+  locale: "en-GB"
+  # Print players' skin faces as photographs on the typeset pages.
+  # auto: only on online-mode servers (offline-mode names may belong to
+  # someone else's Mojang account). true / false to force.
+  portraits: auto
   # Max stories per section (only used when LLM is disabled).
   stories-per-section: 5
   # Include raw statistics page.
@@ -116,6 +126,52 @@ newspaper:
 editor:
   review-required: false
 
+# Send each new issue beyond the server. Both need web.public-url so links
+# and images resolve for people outside the game.
+publish:
+  # Publish issues as Standard.site documents on AT Protocol (readable in
+  # Standard.site readers; optionally announced on Bluesky). The site is
+  # verified automatically: the web server serves
+  # /.well-known/site.standard.publication and per-issue <link> tags.
+  standard-site:
+    enabled: false
+    # Handle (e.g. news.example.com) or DID of the publishing account.
+    identifier: ""
+    # An app password (Settings > Privacy and security > App passwords),
+    # never your account password.
+    app-password: ""
+    # Leave blank to find the account's PDS from its handle/DID.
+    pds-url: ""
+    announce-on-bluesky: false
+  # Post each new issue to a Discord channel with the front page attached.
+  discord:
+    enabled: false
+    # Channel settings > Integrations > Webhooks > New webhook > Copy URL.
+    webhook-url: ""
+    # Optional: "@here" or a role mention like "<@&123456789012345678>".
+    mention: ""
+    # With no webhook, post a link through DiscordSRV's main channel.
+    use-discordsrv: true
+
+# News from other plugins, used automatically when they are installed.
+integrations:
+  towny: true        # towns and nations founded, joined and fallen
+  lands: true        # lands, nations and wars
+  mcmmo: true        # skill milestones
+  mcmmo-milestone: 100
+  luckperms: true    # rank promotions along tracks
+  quickshop: true    # the Market Report (QuickShop-Hikari)
+  votifier: true     # server-list votes (NuVotifier)
+  plan: true         # Chronicler numbers on Plan's pages
+
+# Letters to the editor, classified adverts and the reader poll.
+contributions:
+  enabled: true
+  # Staff approve submissions with /chronicler submissions before they print.
+  require-approval: true
+  # How many unreviewed submissions one player may have waiting.
+  max-pending-per-player: 2
+
 archive:
   # Oldest issues beyond this count are removed after publication.
   retention: 50
@@ -130,7 +186,11 @@ backfill:
 
 privacy:
   include-private-messages: false
+  # When false, chat text is never written to events.json (chat is still
+  # counted); sign text is kept but left out of issues. Death messages and
+  # other server text are unaffected.
   include-chat-excerpts: false
+  # Also enables map markers on BlueMap / squaremap for stories with a location.
   include-coordinates: false
   excluded-players: []
 
@@ -148,3 +208,26 @@ web:
   port: 8080
   # Write HTML to plugin folder even when serving.
   write-files: true
+  # The address people reach this web server on, e.g. "http://play.example.com:8080".
+  # Used for the resource pack download, printed page images and links in
+  # Discord / Standard.site posts. Blank uses server-ip from server.properties.
+  public-url: ""
+
+# How players read an issue in-game.
+reader:
+  # newspaper: a typeset broadsheet page shown in a reader screen (uses the
+  #            resource pack below; players without it get a text edition).
+  # book:      the classic written book.
+  mode: newspaper
+  # On-screen page width in GUI pixels (256-512). 336 suits GUI scale 3 at 1080p.
+  page-width: 336
+  resource-pack:
+    # Serve Chronicler's resource pack (newspaper item art and printed pages)
+    # from the web server above, and offer it to players on join.
+    enabled: true
+    # Downloaded from web.public-url; if that and server-ip are both blank the
+    # pack is only written to plugins/Chronicler/web/chronicler-pack.zip.
+    # Kick players who decline the pack.
+    required: false
+    # Shown on the download prompt (MiniMessage). Blank uses the default.
+    prompt: ""
