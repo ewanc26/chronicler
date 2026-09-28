@@ -320,7 +320,9 @@ class Chronicler : JavaPlugin() {
         webRenderer?.standardSite = standardSite
 
         val newsHooks = NewsHooks(this, eventStore, cfg.integrations, logger).also { it.register() }
-        val planExtension = if (cfg.integrations.plan) hook(this, "Plan", logger) {
+        // Typed Any: a PlanExtension-typed result would be cast (and the class loaded) even
+        // when Plan is absent, failing with NoClassDefFoundError for DataExtension.
+        val planExtension: Any? = if (cfg.integrations.plan) hook<Any?>(this, "Plan", logger) {
             PlanExtension.register(PlanData(
                 issuesPublished = { publicationTask.getIssueNumber().toLong() },
                 printedReaders = { packService.loadedCount().toLong() },
