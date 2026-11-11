@@ -5,6 +5,7 @@ build/
 *.iml
 .DS_Store
 *.jar
+!gradle/wrapper/gradle-wrapper.jar
 *.log
 out/
 
