@@ -1,3 +1,10 @@
+<p align="center">
+  <a href="https://github.com/ewanc26/chronicler/actions/workflows/ci.yml"><img src="https://github.com/ewanc26/chronicler/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/ewanc26/chronicler/releases/latest"><img src="https://img.shields.io/github/v/release/ewanc26/chronicler?sort=semver" alt="Latest release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/ewanc26/chronicler?label=licence" alt="Licence"></a>
+  <a href="https://github.com/sponsors/ewanc26"><img src="https://img.shields.io/github/sponsors/ewanc26?logo=githubsponsors&logoColor=white&label=sponsors" alt="Sponsor"></a>
+</p>
+
 # Chronicler
 
 A PaperMC plugin that tracks server events and generates a dynamic in-game newspaper delivered as a written book.
@@ -20,7 +27,8 @@ A PaperMC plugin that tracks server events and generates a dynamic in-game newsp
 - **Archive & Search** — Retention policies, import/export, web issue navigation, permalinks, and full-text search
 - **Safe Updates** — Automatic GitHub release updates with mandatory SHA-256 verification
 - **PlaceholderAPI** — 13+ placeholders exposing issue stats, player playtime, login streaks
-- **Archived Issues** — Every issue is saved to disk and browsable via `/chronicler archive`
+- **Archived Issues** — Every i
+ssue is saved to disk and browsable via `/chronicler archive`
 - **Headline Ticker** — Periodic action-bar broadcasts of random headlines from the latest issue
 - **Issue #0** — On first run, server logs (`logs/latest.log` and rotated `*.log.gz`) are parsed to backfill historical events (joins, deaths, advancements, chat) into issue #0
 - **Auto-Delivery** — Each new issue spawns directly into every online player's inventory (drops at feet if full); players can opt out with `/chronicler subscribe`
@@ -43,7 +51,8 @@ How it works:
 - Players who decline the pack get the same text edition automatically, with section-by-section navigation, and the item is still a normal written book, laid out to fit book pages exactly.
 - Old papers printed by earlier versions open in the reader too.
 
-Set `web.public-url` to the address people reach your web server on (for example `http://play.example.com:8080`). It is used for the pack download, printed page images (`/print/<issue>/page-<n>.png`) and links in Discord and Standard.site posts. If it is blank, `server-ip` is used; if that is blank too, the pack is only written to `plugins/Chronicler/web/chronicler-pack.zip` for you to host. Modern clients stack server resource packs, so Chronicler's pack sits alongside your own; `/chronicler pack export` writes it (and the page images) out if you prefer to merge or host it yourself. Set `reader.mode: book` to keep the classic written book only.
+Se
+t `web.public-url` to the address people reach your web server on (for example `http://play.example.com:8080`). It is used for the pack download, printed page images (`/print/<issue>/page-<n>.png`) and links in Discord and Standard.site posts. If it is blank, `server-ip` is used; if that is blank too, the pack is only written to `plugins/Chronicler/web/chronicler-pack.zip` for you to host. Modern clients stack server resource packs, so Chronicler's pack sits alongside your own; `/chronicler pack export` writes it (and the page images) out if you prefer to merge or host it yourself. Set `reader.mode: book` to keep the classic written book only.
 
 **Every client gets something readable.** Players on older Java versions (through ViaVersion) are not offered the 26.x pack and read the laid-out book, since ViaBackwards would turn dialogs into chest menus. Bedrock players (through Geyser/Floodgate) get the text edition as Bedrock forms. Dates in the reader follow each player's client language; printed pages use `newspaper.locale`.
 
@@ -57,7 +66,8 @@ Set `web.public-url` to the address people reach your web server on (for example
 
 ## Newsstands
 
-Look at an item frame on a wall (the top-left corner) and run `/chronicler newsstand create [cols] [rows]`, or from the console / a command block `/chronicler newsstand create <cols> <rows> <x> <y> <z> <facing> [world]`. Missing frames are placed for you. The wall shows each new front page as map art and opens the reader when right-clicked; `4 6` makes headlines legible from a few blocks away.
+Look at an i
+tem frame on a wall (the top-left corner) and run `/chronicler newsstand create [cols] [rows]`, or from the console / a command block `/chronicler newsstand create <cols> <rows> <x> <y> <z> <facing> [world]`. Missing frames are placed for you. The wall shows each new front page as map art and opens the reader when right-clicked; `4 6` makes headlines legible from a few blocks away.
 
 ## Beyond the Server
 
@@ -78,7 +88,8 @@ Used automatically when installed (toggle under `integrations:`):
 | QuickShop-Hikari | **Market Report**: sales, average prices, busiest shop |
 | NuVotifier | **Votes**: server-list votes and top voters |
 | Plan | Chronicler numbers on Plan's server and player pages |
-| ViaVersion, Geyser/Floodgate | The right reader for older Java and Bedrock clients |
+| ViaVersion, Gey
+ser/Floodgate | The right reader for older Java and Bedrock clients |
 | BlueMap, squaremap | Story markers (see above) |
 | DiscordSRV | Discord posts without a webhook |
 
@@ -138,7 +149,8 @@ bstats-enabled: true
 # LLM article generation (set enabled: false for template-only mode)
 llm:
   enabled: true
-  provider: ollama    # ollama, openai, anthropic, lmstudio, cocore
+  provider: ollama    # ollama, openai, ant
+hropic, lmstudio, cocore
   model: llama3.2
   api-key: ""
   base-url: https://openrouter.ai/api/v1
@@ -173,7 +185,8 @@ The LLM is probed asynchronously at startup and again before each issue, so a mo
 | `/chronicler editor edit <section> <story> headline\|body <text>` | `chronicler.admin` | Edit draft copy |
 | `/chronicler editor remove <section> <story>` | `chronicler.admin` | Remove a draft story |
 | `/chronicler editor publish` | `chronicler.admin` | Approve and publish the draft |
-| `/chronicler diagnostics` | `chronicler.admin` | Show subsystem and updater health |
+| `/chronicler diagnostics` | `chronicle
+r.admin` | Show subsystem and updater health |
 | `/chronicler reload` | `chronicler.admin` | Reload configuration and restart all subsystems |
 | `/chronicler publish` | `chronicler.admin` | Force-publish a new issue now |
 | `/chronicler write [letter\|ad <headline> \| <text>]` | `chronicler.write` | Send a letter to the editor or a classified advert |
@@ -210,7 +223,8 @@ Alias: `/clr`
 |---|---|---|
 | `chronicler.use` | `true` | Read the paper, vote, subscribe |
 | `chronicler.write` | `true` | Send letters and classified adverts |
-| `chronicler.admin` | `op` | Reload, publish, moderation, newsstands, publishing |
+| `chronicler.admin` |
+ `op` | Reload, publish, moderation, newsstands, publishing |
 
 ## Building from Source
 
@@ -248,7 +262,10 @@ If you find this project useful, consider supporting its development:
 
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-F16061?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/ewancroft)
 [![GitHub Sponsors](https://img.shields.io/badge/GitHub%20Sponsors-30363D?style=for-the-badge&logo=github&logoColor=white)](https://github.com/sponsors/ewanc26)
+## Contributing
 
-## License
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow and the checks required before opening a pull request.
+
+## Licence
 
 AGPL-3.0. See [LICENSE](LICENSE).
