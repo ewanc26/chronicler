@@ -1,3 +1,10 @@
+<p align="center">
+  <a href="https://github.com/ewanc26/chronicler/actions/workflows/ci.yml"><img src="https://github.com/ewanc26/chronicler/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/ewanc26/chronicler/releases/latest"><img src="https://img.shields.io/github/v/release/ewanc26/chronicler?sort=semver" alt="Latest release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/ewanc26/chronicler?label=licence" alt="Licence"></a>
+  <a href="https://github.com/sponsors/ewanc26"><img src="https://img.shields.io/github/sponsors/ewanc26?logo=githubsponsors&logoColor=white&label=sponsors" alt="Sponsor"></a>
+</p>
+
 # Chronicler
 
 A PaperMC plugin that tracks server events and generates a dynamic in-game newspaper delivered as a written book.
@@ -250,6 +257,8 @@ If you find this project useful, consider supporting its development:
 [![GitHub Sponsors](https://img.shields.io/badge/GitHub%20Sponsors-30363D?style=for-the-badge&logo=github&logoColor=white)](https://github.com/sponsors/ewanc26)
 [![Liberapay](https://img.shields.io/badge/Liberapay-A60000?style=for-the-badge&logo=liberapay&logoColor=white)](https://liberapay.com/ewanc26/)
 
-## License
-
+## Licence
 AGPL-3.0. See [LICENSE](LICENSE).
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow and the checks required before opening a pull request.
