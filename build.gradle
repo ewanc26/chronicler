@@ -44,7 +44,7 @@ dependencies {
     compileOnly('com.gmail.nossr50.mcMMO:mcMMO:2.3.002') { transitive = false }
     compileOnly('com.ghostchu:quickshop-api:6.3.0.0') { transitive = false }
     compileOnly('com.djrapitops:plan-api:5.9-R0.1') { transitive = false }
-    implementation 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.3.21'
+    implementation 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.4.21'
     implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3'
     implementation 'org.bstats:bstats-bukkit:3.1.0'
 
