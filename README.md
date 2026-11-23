@@ -259,6 +259,9 @@ If you find this project useful, consider supporting its development:
 
 ## Licence
 AGPL-3.0. See [LICENSE](LICENSE).
+
+Copyright (C) 2026 Ewan Croft (ewanc26).
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow and the checks required before opening a pull request.
