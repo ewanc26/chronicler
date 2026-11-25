@@ -1,5 +1,5 @@
 plugins {
-    id 'org.jetbrains.kotlin.jvm' version '2.3.21'
+    id 'org.jetbrains.kotlin.jvm' version '2.4.21'
     id 'org.jetbrains.kotlin.plugin.serialization' version '2.4.21'
     id 'com.gradleup.shadow' version '9.4.3'
 }
@@ -28,7 +28,7 @@ repositories {
 }
 
 dependencies {
-    compileOnly 'io.papermc.paper:paper-api:26.1.2.build.72-stable'
+    compileOnly 'io.papermc.paper:paper-api:26.3.build.249-stable'
     compileOnly 'me.clip:placeholderapi:2.11.6'
     compileOnly('com.github.MilkBowl:VaultAPI:1.7') {
         exclude group: 'org.bukkit'
@@ -49,8 +49,9 @@ dependencies {
     implementation 'org.bstats:bstats-bukkit:3.1.0'
 
     testImplementation 'org.junit.jupiter:junit-jupiter:5.12.2'
-    testImplementation 'org.jetbrains.kotlin:kotlin-test:2.3.21'
-    testImplementation 'org.mockbukkit.mockbukkit:mockbukkit-v1.21:4.35.0'
+    testImplementation 'org.jetbrains.kotlin:kotlin-test:2.4.21'
+    testImplementation 'org.mockbukkit.mockbukkit:mockbukkit-v26.3:4.124.0'
+    testImplementation 'io.papermc.paper:paper-api:26.3.build.249-stable'
     testImplementation 'net.kyori:adventure-text-minimessage:4.20.0'
 }
 
